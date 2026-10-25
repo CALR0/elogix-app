@@ -9,7 +9,7 @@ con el experto de TusDatos las preguntas de `ELOGIX_CONTEXT.md` §15, porque def
 cambio de modelo **Estudio → Consultas** (§14.3).
 
 **Siguiente paso recomendado (en orden):**
-1. `git init` + primer commit (aún no hay control de versiones).
+1. ~~git init~~ ✅ hecho — repo `CALR0/elogix-app`, rama `main`.
 2. Con las respuestas de §15: reescribir `supabase/migrations/20261025000000_init.sql` al modelo
    Estudio → Consultas (aún no se ha aplicado en ningún entorno) y actualizar `npm run db:test`.
 3. Crear proyecto Supabase, `.env.local`, `supabase link` + `db push`, `npm run db:types`.
@@ -67,10 +67,10 @@ Incluye la revisión de arquitectura de Fase 1 (ver `ELOGIX_CONTEXT.md` §13).
 - [x] Prettier (+ plugin Tailwind), scripts `type-check`, `format`, `db:*`
 - [x] Design tokens (paleta ELOGIX + semáforo de hallazgos, nombres compatibles con shadcn), Inter, `lang="es"`
 - [x] Security headers en `next.config.ts`
-- [ ] Inicializar git + primer commit
+- [x] Inicializar git + primer commit (repo: github.com/CALR0/elogix-app)
 - [ ] Instalar shadcn/ui (`npx shadcn@latest init`) sobre los tokens existentes
 - [ ] **(Tú)** Crear proyecto en Supabase y llenar `.env.local`
-- [ ] **(Tú)** Crear repo en GitHub → Claude deja git listo → tú haces el push
+- [x] Repo en GitHub creado y git listo (falta tu `git push`)
 - [ ] **(Tú, guiado)** Aplicar migración: `npx supabase link` + `npm run db:push` (sin BD local: todo contra la nube)
 - [ ] Generar tipos: `npm run db:types` → tipar los clientes de Supabase
 - [ ] Route Handlers: `/api/webhooks/tusdatos`, `/api/cron/sincronizar`, `/api/reportes/[id]` + `vercel.json` (cron)
