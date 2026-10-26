@@ -4,16 +4,19 @@
 > Última actualización: 2026-10-25
 
 **Dónde vamos:** Fase 2 (setup) casi completa. El código compila (`lint`, `type-check`, `build` OK)
-y la migración de BD pasa las pruebas RLS (`npm run db:test`). **Bloqueante para Fase 3:** confirmar
-con el experto de TusDatos las preguntas de `ELOGIX_CONTEXT.md` §15, porque definen si se aplica el
+y la migración de BD pasa las pruebas RLS (`npm run db:test`). Ya existe la **pantalla de login**
+(solo diseño, `app/(auth)/login`) con la paleta salvia y el logo de Elogia. **Bloqueante para Fase 3:**
+las respuestas de Keyner a las preguntas de `ELOGIX_CONTEXT.md` §15, porque definen si se aplica el
 cambio de modelo **Estudio → Consultas** (§14.3).
 
 **Siguiente paso recomendado (en orden):**
 1. ~~git init~~ ✅ hecho — repo `CALR0/elogix-app`, rama `main`.
 2. Con las respuestas de §15: reescribir `supabase/migrations/20261025000000_init.sql` al modelo
    Estudio → Consultas (aún no se ha aplicado en ningún entorno) y actualizar `npm run db:test`.
-3. Crear proyecto Supabase, `.env.local`, `supabase link` + `db push`, `npm run db:types`.
-4. shadcn/ui + Route Handlers (webhook, cron, reportes) + `vercel.json`.
+3. Crear proyecto Supabase (guiar al usuario paso a paso), `.env.local`, `supabase link` + `db push`,
+   `npm run db:types`, crear el primer admin (`supabase/seed.sql`).
+4. Conectar el login a Supabase Auth (`app/(auth)/login/actions.ts`) y redirigir por rol.
+5. shadcn/ui (con los tokens salvia) + Route Handlers (webhook, cron, reportes) + `vercel.json`.
 
 ### Bitácora de sesiones
 
@@ -28,6 +31,7 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 | 2026-10-25 | Fase 2 (f) | Logo guardado en `public/brand/elogia-logo.png` (salvia `#95A495`). Paleta §8.2 rehecha desde el logo con contrastes WCAG verificados. Pendiente: logo en SVG y favicon |
 | 2026-10-25 | Fase 2 (g) | Paleta salvia aplicada en `globals.css` (claro + `.dark`, foco visible, reduced-motion). Inicio con logo, revisado en escritorio y móvil. `proxy.ts` deja ver la UI en desarrollo sin `.env.local` (en producción responde 503). `.claude/launch.json` para `npm run dev` |
 | 2026-10-25 | Fase 2 (h) | Logo vectorizado a SVG, ícono de pestaña (hoja), pantalla de login moderna (panel de marca en escritorio, formulario mobile-first, mostrar/ocultar contraseña). `/` redirige a `/login`. Al ingresar aún no pasa nada (falta Supabase) |
+| 2026-10-25 | Fase 2 (i) | Login de escritorio rediseñado: fondo verde de marca con líneas de ruta, tarjeta del formulario a la izquierda y a la derecha el recorrido del estudio como itinerario de viaje (Origen → En ruta → Destino). Título "Iniciar sesión" centrado, sin subtítulo. Revisado en 1440, 1024 y móvil |
 
 ---
 
