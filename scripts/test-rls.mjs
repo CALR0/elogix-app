@@ -1,8 +1,9 @@
 /**
- * Pruebas de RLS sin Docker: aplica supabase/migrations/*.sql + seed.sql en un Postgres
- * embebido (PGlite) con stubs mínimos de Supabase (auth, storage, roles) y verifica permisos.
+ * Chequeo rápido de permisos (RLS) sin tocar la nube ni usar Docker: aplica
+ * supabase/migrations/*.sql en un Postgres embebido (PGlite) con stubs mínimos de
+ * Supabase (auth, storage, roles) y verifica qué puede hacer cada rol.
  *
- * Uso: npm run db:test
+ * Uso: npm run db:test   (córrelo antes de `npm run db:push`)
  */
 import { PGlite } from "@electric-sql/pglite";
 import fs from "node:fs";
@@ -15,7 +16,6 @@ const migrations = fs
   .filter((f) => f.endsWith(".sql"))
   .sort()
   .map((f) => fs.readFileSync(path.join(migrationsDir, f), "utf8"));
-const seed = fs.readFileSync(path.join(root, "supabase", "seed.sql"), "utf8");
 
 const db = new PGlite();
 
@@ -37,25 +37,19 @@ await db.exec(`
 `);
 
 for (const sql of migrations) await db.exec(sql);
-await db.exec(seed);
 
 // ─── Datos de prueba ────────────────────────────────────────────────────────
-const ORG = "00000000-0000-0000-0000-000000000001";
-const OTRA_ORG = "00000000-0000-0000-0000-000000000002";
 const USUARIO = "11111111-1111-1111-1111-111111111111";
+const OTRO_USUARIO = "33333333-3333-3333-3333-333333333333";
 const ADMIN = "22222222-2222-2222-2222-222222222222";
-const ADMIN_OTRA = "33333333-3333-3333-3333-333333333333";
 
-await db.exec(
-  `insert into public.organizations (id, name, slug) values ('${OTRA_ORG}', 'Otra', 'otra')`,
-);
-for (const [id, role, org, email] of [
-  [USUARIO, "usuario", ORG, "usuario@elogia.test"],
-  [ADMIN, "admin", ORG, "admin@elogia.test"],
-  [ADMIN_OTRA, "admin", OTRA_ORG, "admin@otra.test"],
+for (const [id, role, email] of [
+  [USUARIO, "usuario", "usuario@elogia.test"],
+  [OTRO_USUARIO, "usuario", "otro@elogia.test"],
+  [ADMIN, "admin", "admin@elogia.test"],
 ]) {
   await db.exec(`insert into auth.users (id, email, raw_app_meta_data, raw_user_meta_data)
-    values ('${id}', '${email}', '{"organization_id":"${org}","role":"${role}"}', '{"full_name":"${role}"}')`);
+    values ('${id}', '${email}', '{"role":"${role}"}', '{"full_name":"${role}"}')`);
 }
 
 async function as(uid, sql) {
@@ -82,20 +76,20 @@ function check(nombre, ok, detalle) {
 }
 const ok = (r, n) => !r.error && (n === undefined || r.rows.length === n);
 const err = (r) => Boolean(r.error);
+const insertCC = (doc) =>
+  `insert into public.solicitudes (tipo_documento, documento, autorizacion_titular) values ('CC', '${doc}', true)`;
 
-let r = await as(
-  USUARIO,
-  `insert into public.solicitudes (tipo_documento, documento, autorizacion_titular)
-  values ('CC', '123', true) returning organization_id, created_by, estado`,
-);
+let r = await as(USUARIO, `${insertCC("123")} returning created_by, estado`);
 check(
-  "usuario crea solicitud CC (org y autor salen de la sesión)",
+  "usuario crea solicitud CC (el autor sale de la sesión)",
   ok(r, 1) &&
-    r.rows[0].organization_id === ORG &&
     r.rows[0].created_by === USUARIO &&
     r.rows[0].estado === "enviada",
   r,
 );
+
+r = await as(OTRO_USUARIO, insertCC("456"));
+check("otro usuario crea su solicitud", ok(r), r);
 
 r = await as(
   USUARIO,
@@ -117,19 +111,23 @@ check("usuario no puede fijar el estado", err(r), r);
 
 r = await as(
   USUARIO,
-  `insert into public.solicitudes (tipo_documento, documento, autorizacion_titular, organization_id) values ('CC', '1', true, '${OTRA_ORG}')`,
+  `insert into public.solicitudes (tipo_documento, documento, autorizacion_titular, created_by) values ('CC', '1', true, '${OTRO_USUARIO}')`,
 );
-check("usuario no puede elegir organización", err(r), r);
+check("usuario no puede crear a nombre de otro", err(r), r);
 
-// El sistema (sin RLS) registra el resultado
-await db.exec(`insert into public.solicitud_resultados (solicitud_id, organization_id, hallazgo, hallazgo_nivel)
-  select id, organization_id, true, 'alto' from public.solicitudes`);
+// El sistema (sin RLS) registra los resultados
+await db.exec(`insert into public.solicitud_resultados (solicitud_id, hallazgo, hallazgo_nivel)
+  select id, true, 'alto' from public.solicitudes`);
 
 r = await as(USUARIO, `select * from public.solicitud_resultados`);
 check("usuario NO ve resultados/hallazgos", ok(r, 0), r);
 
-r = await as(USUARIO, `select id from public.solicitudes`);
-check("usuario ve sus solicitudes", ok(r, 1), r);
+r = await as(USUARIO, `select documento from public.solicitudes`);
+check(
+  "usuario ve solo sus solicitudes (no las de otros)",
+  ok(r, 1) && r.rows[0].documento === "123",
+  r,
+);
 
 r = await as(
   USUARIO,
@@ -146,10 +144,19 @@ check("usuario edita su nombre", ok(r, 1), r);
 r = await as(USUARIO, `select id from public.profiles`);
 check("usuario solo ve su perfil", ok(r, 1), r);
 
+r = await as(
+  USUARIO,
+  `update public.configuracion set requiere_confirmacion_envio = true returning id`,
+);
+check("usuario no cambia la configuración", ok(r, 0) || err(r), r);
+
+r = await as(ADMIN, `select id from public.solicitudes`);
+check("admin ve todas las solicitudes (2)", ok(r, 2), r);
+
 r = await as(ADMIN, `select hallazgo_nivel from public.solicitud_resultados`);
 check(
-  "admin ve resultados de su org",
-  ok(r, 1) && r.rows[0].hallazgo_nivel === "alto",
+  "admin ve resultados",
+  ok(r, 2) && r.rows[0].hallazgo_nivel === "alto",
   r,
 );
 
@@ -159,7 +166,7 @@ r = await as(
 );
 check(
   "admin aprueba y queda registrado quién",
-  ok(r, 1) && r.rows[0].revisado_por === ADMIN,
+  ok(r, 2) && r.rows[0].revisado_por === ADMIN,
   r,
 );
 
@@ -170,16 +177,21 @@ r = await as(
 check("admin no puede alterar el hallazgo", err(r), r);
 
 r = await as(ADMIN, `select id from public.profiles`);
-check("admin ve perfiles de su org (2)", ok(r, 2), r);
-
-r = await as(ADMIN_OTRA, `select id from public.solicitudes`);
-check("admin de otra org no ve solicitudes ajenas", ok(r, 0), r);
+check("admin ve todos los perfiles (3)", ok(r, 3), r);
 
 r = await as(
-  ADMIN_OTRA,
-  `select solicitud_id from public.solicitud_resultados`,
+  ADMIN,
+  `update public.configuracion set requiere_confirmacion_envio = true returning id`,
 );
-check("admin de otra org no ve resultados ajenos", ok(r, 0), r);
+check("admin cambia la configuración", ok(r, 1), r);
+
+await db.exec(
+  `update public.profiles set active = false where id = '${USUARIO}'`,
+);
+r = await as(USUARIO, `select id from public.solicitudes`);
+check("usuario desactivado no ve sus solicitudes", ok(r, 0), r);
+r = await as(USUARIO, insertCC("789"));
+check("usuario desactivado no puede crear solicitudes", err(r), r);
 
 await db.exec(
   `update public.profiles set active = false where id = '${ADMIN}'`,

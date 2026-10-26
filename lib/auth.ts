@@ -9,9 +9,7 @@ export interface CurrentUser {
   id: string;
   email: string;
   fullName: string | null;
-  organizationId: string;
   role: AppRole;
-  isPlatformAdmin: boolean;
 }
 
 /**
@@ -26,9 +24,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select(
-      "id, email, full_name, organization_id, role, is_platform_admin, active",
-    )
+    .select("id, email, full_name, role, active")
     .eq("id", userId)
     .single();
 
@@ -38,9 +34,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     id: profile.id,
     email: profile.email,
     fullName: profile.full_name,
-    organizationId: profile.organization_id,
     role: profile.role,
-    isPlatformAdmin: profile.is_platform_admin,
   };
 });
 
@@ -51,16 +45,14 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** Exige rol admin (o super-admin de Elogia). */
+/** Exige rol admin. */
 export async function requireAdmin(): Promise<CurrentUser> {
   const user = await requireUser();
-  if (user.role !== "admin" && !user.isPlatformAdmin) forbidden();
+  if (user.role !== "admin") forbidden();
   return user;
 }
 
 /** Ruta de inicio según el rol. */
 export function homePathFor(user: CurrentUser) {
-  return user.role === "admin" || user.isPlatformAdmin
-    ? "/dashboard"
-    : "/solicitudes";
+  return user.role === "admin" ? "/dashboard" : "/solicitudes";
 }

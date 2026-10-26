@@ -22,6 +22,7 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 | 2026-10-25 | Fase 1 | Análisis de TusDatos API, contexto, arquitectura inicial, Next.js creado en `apps/web` |
 | 2026-10-25 | Fase 2 (a) | Revisión de arquitectura (13 correcciones, ver contexto §13). Monorepo aplanado a la raíz, `docs/`. Migración + RLS + pruebas PGlite. SDK TusDatos reescrito. `env.ts`, `auth.ts`, clientes Supabase, `proxy.ts`, tokens de diseño, headers de seguridad |
 | 2026-10-25 | Fase 2 (b) | Definido el objetivo de negocio (contexto §14), propuesta Estudio → Consultas (§14.3), preguntas para el experto TusDatos (§15). `CLAUDE.md` de arranque. Prueba RLS movida al repo (`scripts/test-rls.mjs`) |
+| 2026-10-25 | Fase 2 (c) | Flujo de trabajo: todo en la nube (local → Supabase nube → Vercel), sin Docker. Git inicializado (`CALR0/elogix-app`). **App solo para Elogia:** eliminada la multi-organización y `is_platform_admin`; tabla `configuracion` global; 22 pruebas RLS |
 
 ---
 
@@ -35,7 +36,7 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 - [x] Códigos de error documentados
 - [x] Catálogo de ~261 fuentes de hallazgos
 - [x] Arquitectura propuesta (Next.js + Supabase + Vercel) — revisada en Fase 2
-- [x] Diseño de base de datos con RLS multi-tenant
+- [x] Diseño de base de datos con RLS (multi-tenant descartado en Fase 2: app solo para Elogia)
 - [x] Variables de entorno definidas
 - [x] Sistema de roles y permisos
 - [x] Identidad visual ELOGIX (paleta, tipografía, principios)
@@ -89,7 +90,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 
 ### Tareas
 - [ ] **Modelo Estudio → Consultas** *(§14.3)* — formularios por tipo de estudio (p.ej. conductor = persona + vehículo + propietario)
-- [ ] **Envío automático** a TusDatos + ajuste por organización `requiere_confirmacion_envio` con confirmación en lote *(§14 P1-P2)*
+- [ ] **Envío automático** a TusDatos + ajuste global `requiere_confirmacion_envio` con confirmación en lote *(§14 P1-P2)*
 - [ ] **Control de créditos:** duplicados, límite diario por usuario, alerta de saldo bajo *(§14 P3)*
 - [ ] **Bandeja por riesgo** + aprobación en lote de "sin hallazgo" *(§14 P4)*
 - [ ] **Decisión sugerida** por reglas, si el experto define criterios *(§14 P6)*
@@ -103,7 +104,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
     - `admin` → `/dashboard`
 - [ ] **Layout del Usuario**
   - [ ] Sidebar mínimo: Nueva Solicitud + Mis Solicitudes + Perfil
-  - [ ] Navbar con nombre del usuario y organización
+  - [ ] Navbar con nombre y rol del usuario
 - [ ] **Layout del Admin**
   - [ ] Sidebar completo: Dashboard, Estudios, Batch, Usuarios, Auditoría, Monitoreo, Config
   - [ ] Badge de hallazgo en items del sidebar
@@ -160,14 +161,13 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 
 ---
 
-## Fase 5 — Multi-tenant y Admin ⏳ PENDIENTE
+## Fase 5 — Gestión de Usuarios y Configuración ⏳ PENDIENTE
+
+> Multi-tenant y super-admin **descartados**: ELOGIX es solo para Elogia.
 
 ### Tareas
-- [ ] Panel super-admin Elogia
-  - [ ] Gestión de organizaciones (crear, editar, suspender)
-  - [ ] Asignación de credenciales TusDatos por organización
-  - [ ] Vista global de uso y créditos
-- [ ] Gestión de usuarios por organización (admin)
+- [ ] Vista de uso y créditos de la cuenta TusDatos
+- [ ] Gestión de usuarios (admin)
   - [ ] Invitar usuarios por email
   - [ ] Asignar/cambiar roles
   - [ ] Desactivar usuarios
@@ -194,7 +194,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
   - [ ] Preview deployments automáticos
 - [ ] Documentación
   - [ ] README del proyecto
-  - [ ] Guía de onboarding para nuevas organizaciones
+  - [ ] Guía de uso para usuarios y admin
   - [ ] Documentación de API interna
 
 ### Tiempo estimado: 3-4 días
@@ -209,7 +209,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 | 2 | Setup del Proyecto | 🔄 En curso | 2-3 días |
 | 3 | Core Features (formulario usuario + revisor admin) | ⏳ Pendiente | 6-8 días |
 | 4 | Gestión de usuarios + Auditoría + Batch + Webhooks | ⏳ Pendiente | 8-10 días |
-| 5 | Multi-tenant y Panel super-admin Elogia | ⏳ Pendiente | 4-5 días |
+| 5 | Gestión de usuarios y configuración | ⏳ Pendiente | 2-3 días |
 | 6 | Polish y Deploy | ⏳ Pendiente | 3-4 días |
 | **Total** | | | **~24-31 días** |
 

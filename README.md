@@ -54,7 +54,6 @@ Las consultas a TusDatos son reales y **consumen créditos**.
 ## Roles
 - **`usuario`** — Ingresa solicitudes de validación, ve solo el estado
 - **`admin`** — Revisa resultados, hallazgos, reportes; gestiona usuarios y configuración
-- **`is_platform_admin`** — Equipo Elogia, administra todas las organizaciones
 
 ## Documentación
 - [`docs/ELOGIX_CONTEXT.md`](./docs/ELOGIX_CONTEXT.md) — documentación técnica (§13: revisión de arquitectura de Fase 2)

@@ -1,5 +1,8 @@
--- Datos mínimos para desarrollo local (`npm run db:reset`).
--- Los usuarios se crean desde la app (o el Studio local) con app_metadata:
---   { "organization_id": "00000000-0000-0000-0000-000000000001", "role": "admin" }
-insert into public.organizations (id, name, slug, nit)
-values ('00000000-0000-0000-0000-000000000001', 'Elogia Soluciones Logísticas', 'elogia', null);
+-- No hay datos semilla: los usuarios los crea el admin desde la app.
+--
+-- Primer admin (una sola vez, en Supabase → Authentication → Add user):
+--   1. Crea el usuario con email y contraseña.
+--   2. En SQL Editor:
+--        update auth.users set raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'
+--        where email = 'admin@elogia.com';
+--        update public.profiles set role = 'admin' where email = 'admin@elogia.com';

@@ -1,14 +1,16 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- ELOGIX — Esquema inicial
 --
+-- App de uso exclusivo de Elogia Soluciones Logísticas (una sola empresa, sin
+-- multi-organización).
+--
 -- Principios:
---  1. Multi-tenant: toda fila de negocio lleva organization_id y RLS lo aísla.
---  2. Dos roles por organización: 'usuario' y 'admin' (+ flag is_platform_admin
---     para el equipo de Elogia que administra todas las organizaciones).
---  3. RLS filtra filas, NO columnas. Por eso los hallazgos viven en
+--  1. Dos roles: 'usuario' (envía solicitudes y ve su estado) y 'admin'
+--     (revisa resultados, aprueba/rechaza, gestiona usuarios y configuración).
+--  2. RLS filtra filas, NO columnas. Por eso los hallazgos viven en
 --     solicitud_resultados (solo admin) y no en solicitudes (que el usuario ve).
---  4. Escrituras sensibles (estado TusDatos, roles, auditoría, webhooks) las hace
---     el servidor con la service role key; el cliente solo tiene permisos mínimos.
+--  3. Escrituras sensibles (estado TusDatos, roles, auditoría, webhooks) las hace
+--     el servidor con la secret key; el cliente solo tiene permisos mínimos.
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- ─── Enums ──────────────────────────────────────────────────────────────────
@@ -41,55 +43,23 @@ begin
 end;
 $$;
 
--- ─── Organizaciones ─────────────────────────────────────────────────────────
-
-create table public.organizations (
-  id                      uuid primary key default gen_random_uuid(),
-  name                    text not null,
-  slug                    text not null unique,
-  nit                     text,
-  logo_url                text,
-  active                  boolean not null default true,
-  -- Email de la cuenta TusDatos (no es secreto). Sirve para enrutar webhooks,
-  -- cuyo payload solo trae el campo "user".
-  tusdatos_account_email  text,
-  credit_alert_threshold  int not null default 50,
-  created_at              timestamptz not null default now(),
-  updated_at              timestamptz not null default now()
-);
-
-create trigger organizations_updated_at before update on public.organizations
-  for each row execute function public.set_updated_at();
-
--- Secretos por organización (Fase 5). Sin políticas RLS: solo service role.
--- El valor real va en Supabase Vault; aquí solo la referencia.
-create table public.organization_secrets (
-  organization_id      uuid primary key references public.organizations (id) on delete cascade,
-  tusdatos_secret_id   uuid,  -- vault.secrets.id
-  updated_at           timestamptz not null default now()
-);
-
 -- ─── Perfiles ───────────────────────────────────────────────────────────────
 
 create table public.profiles (
-  id                 uuid primary key references auth.users (id) on delete cascade,
-  organization_id    uuid not null references public.organizations (id),
-  email              text not null,
-  full_name          text,
-  role               public.app_role not null default 'usuario',
-  is_platform_admin  boolean not null default false,
-  active             boolean not null default true,
-  created_at         timestamptz not null default now(),
-  updated_at         timestamptz not null default now()
+  id          uuid primary key references auth.users (id) on delete cascade,
+  email       text not null,
+  full_name   text,
+  role        public.app_role not null default 'usuario',
+  active      boolean not null default true,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
 );
-
-create index profiles_organization_id_idx on public.profiles (organization_id);
 
 create trigger profiles_updated_at before update on public.profiles
   for each row execute function public.set_updated_at();
 
--- Crea el perfil cuando el servidor crea el usuario con auth.admin.createUser().
--- organization_id y role se leen de app_metadata, que solo la service role puede escribir.
+-- Crea el perfil cuando el admin crea un usuario (auth.admin.createUser() desde el servidor).
+-- El rol se lee de app_metadata, que solo la secret key puede escribir.
 create function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -97,16 +67,13 @@ security definer
 set search_path = ''
 as $$
 begin
-  if new.raw_app_meta_data ? 'organization_id' then
-    insert into public.profiles (id, organization_id, email, full_name, role)
-    values (
-      new.id,
-      (new.raw_app_meta_data ->> 'organization_id')::uuid,
-      new.email,
-      new.raw_user_meta_data ->> 'full_name',
-      coalesce((new.raw_app_meta_data ->> 'role')::public.app_role, 'usuario')
-    );
-  end if;
+  insert into public.profiles (id, email, full_name, role)
+  values (
+    new.id,
+    new.email,
+    new.raw_user_meta_data ->> 'full_name',
+    coalesce((new.raw_app_meta_data ->> 'role')::public.app_role, 'usuario')
+  );
   return new;
 end;
 $$;
@@ -116,18 +83,17 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- ─── Helpers de autorización (security definer para evitar recursión RLS) ───
 
-create function public.current_org_id()
-returns uuid
+create function public.is_active_user()
+returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select organization_id from public.profiles
-  where id = auth.uid() and active
+  select exists (select 1 from public.profiles where id = auth.uid() and active)
 $$;
 
-create function public.is_org_admin()
+create function public.is_admin()
 returns boolean
 language sql
 stable
@@ -140,24 +106,25 @@ as $$
   )
 $$;
 
-create function public.is_platform_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1 from public.profiles
-    where id = auth.uid() and active and is_platform_admin
-  )
-$$;
+-- ─── Configuración general (una sola fila) ──────────────────────────────────
+
+create table public.configuracion (
+  id                           boolean primary key default true check (id),
+  -- Si es true, las solicitudes esperan confirmación del admin antes de gastar créditos
+  requiere_confirmacion_envio  boolean not null default false,
+  alerta_creditos_minimos      int not null default 50,
+  updated_at                   timestamptz not null default now()
+);
+
+insert into public.configuracion default values;
+
+create trigger configuracion_updated_at before update on public.configuracion
+  for each row execute function public.set_updated_at();
 
 -- ─── Lotes (batch) ──────────────────────────────────────────────────────────
 
 create table public.lotes (
   id                 uuid primary key default gen_random_uuid(),
-  organization_id    uuid not null references public.organizations (id),
   created_by         uuid not null references public.profiles (id),
   nombre_archivo     text,
   country            text not null default 'CO' check (country in ('CO', 'EC')),
@@ -170,14 +137,13 @@ create table public.lotes (
   finished_at        timestamptz
 );
 
-create index lotes_organization_id_idx on public.lotes (organization_id, created_at desc);
+create index lotes_created_idx on public.lotes (created_at desc);
 
 -- ─── Solicitudes (lo que el usuario ve: datos de entrada + estado) ──────────
 
 create table public.solicitudes (
   id                    uuid primary key default gen_random_uuid(),
   numero                bigint generated always as identity unique,  -- Referencia: SOL-000123
-  organization_id       uuid not null default public.current_org_id() references public.organizations (id),
   created_by            uuid not null default auth.uid() references public.profiles (id),
   lote_id               uuid references public.lotes (id),
 
@@ -214,7 +180,7 @@ create table public.solicitudes (
   )
 );
 
-create index solicitudes_org_created_idx on public.solicitudes (organization_id, created_at desc);
+create index solicitudes_created_idx on public.solicitudes (created_at desc);
 create index solicitudes_created_by_idx on public.solicitudes (created_by, created_at desc);
 create index solicitudes_pendientes_idx on public.solicitudes (estado) where estado in ('enviada', 'procesando');
 create index solicitudes_report_id_idx on public.solicitudes (tusdatos_report_id);
@@ -226,7 +192,6 @@ create trigger solicitudes_updated_at before update on public.solicitudes
 
 create table public.solicitud_resultados (
   solicitud_id          uuid primary key references public.solicitudes (id) on delete cascade,
-  organization_id       uuid not null references public.organizations (id),
   hallazgo              boolean not null default false,
   hallazgo_nivel        public.hallazgo_nivel,
   fuentes               jsonb,                     -- { "Policia": true, "Procuraduria": false, ... }
@@ -240,7 +205,7 @@ create table public.solicitud_resultados (
   updated_at            timestamptz not null default now()
 );
 
-create index solicitud_resultados_org_idx on public.solicitud_resultados (organization_id, hallazgo_nivel);
+create index solicitud_resultados_nivel_idx on public.solicitud_resultados (hallazgo_nivel);
 
 create trigger solicitud_resultados_updated_at before update on public.solicitud_resultados
   for each row execute function public.set_updated_at();
@@ -266,39 +231,36 @@ create trigger solicitud_resultados_stamp_revision before update on public.solic
 -- ─── Webhooks recibidos y auditoría ─────────────────────────────────────────
 
 create table public.webhook_events (
-  id               uuid primary key default gen_random_uuid(),
-  organization_id  uuid references public.organizations (id),
-  event_name       text not null,
-  payload          jsonb not null,
-  processed_at     timestamptz,
-  error            text,
-  received_at      timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  event_name    text not null,
+  payload       jsonb not null,
+  processed_at  timestamptz,
+  error         text,
+  received_at   timestamptz not null default now()
 );
 
-create index webhook_events_org_idx on public.webhook_events (organization_id, received_at desc);
+create index webhook_events_received_idx on public.webhook_events (received_at desc);
 
 create table public.audit_logs (
-  id               bigint generated always as identity primary key,
-  organization_id  uuid references public.organizations (id),
-  actor_id         uuid references public.profiles (id),
-  accion           text not null,   -- p.ej. 'solicitud.crear', 'estudio.aprobar', 'usuario.desactivar'
-  entidad          text,
-  entidad_id       text,
-  metadata         jsonb,
-  ip               inet,
-  user_agent       text,
-  created_at       timestamptz not null default now()
+  id          bigint generated always as identity primary key,
+  actor_id    uuid references public.profiles (id),
+  accion      text not null,   -- p.ej. 'solicitud.crear', 'estudio.aprobar', 'usuario.desactivar'
+  entidad     text,
+  entidad_id  text,
+  metadata    jsonb,
+  ip          inet,
+  user_agent  text,
+  created_at  timestamptz not null default now()
 );
 
-create index audit_logs_org_idx on public.audit_logs (organization_id, created_at desc);
+create index audit_logs_created_idx on public.audit_logs (created_at desc);
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- Row Level Security
 -- ════════════════════════════════════════════════════════════════════════════
 
-alter table public.organizations        enable row level security;
-alter table public.organization_secrets enable row level security;
 alter table public.profiles             enable row level security;
+alter table public.configuracion        enable row level security;
 alter table public.lotes                enable row level security;
 alter table public.solicitudes          enable row level security;
 alter table public.solicitud_resultados enable row level security;
@@ -309,10 +271,12 @@ alter table public.audit_logs           enable row level security;
 -- los GRANT por columna limitan qué se puede escribir).
 revoke all on all tables in schema public from anon, authenticated;
 
-grant select on public.organizations, public.profiles, public.lotes, public.solicitudes,
+grant select on public.profiles, public.configuracion, public.lotes, public.solicitudes,
   public.solicitud_resultados, public.webhook_events, public.audit_logs to authenticated;
 
 grant update (full_name) on public.profiles to authenticated;
+
+grant update (requiere_confirmacion_envio, alerta_creditos_minimos) on public.configuracion to authenticated;
 
 grant insert (tipo_documento, documento, nombre, fecha_expedicion, placa,
   tipo_doc_propietario, autorizacion_titular, autorizacion_soporte)
@@ -320,89 +284,84 @@ grant insert (tipo_documento, documento, nombre, fecha_expedicion, placa,
 
 grant update (revision_estado, revision_comentario) on public.solicitud_resultados to authenticated;
 
--- organizations
-create policy "org: miembros leen su organización" on public.organizations
-  for select to authenticated
-  using (id = public.current_org_id() or public.is_platform_admin());
-
 -- profiles
 create policy "profiles: leer el propio" on public.profiles
   for select to authenticated
   using (id = auth.uid());
 
-create policy "profiles: admin lee los de su organización" on public.profiles
+create policy "profiles: admin lee todos" on public.profiles
   for select to authenticated
-  using ((organization_id = public.current_org_id() and public.is_org_admin()) or public.is_platform_admin());
+  using (public.is_admin());
 
 create policy "profiles: editar el propio nombre" on public.profiles
   for update to authenticated
-  using (id = auth.uid())
+  using (id = auth.uid() and public.is_active_user())
   with check (id = auth.uid());
 
--- solicitudes
-create policy "solicitudes: usuario ve las suyas, admin las de su organización" on public.solicitudes
+-- configuracion
+create policy "configuracion: usuarios activos leen" on public.configuracion
   for select to authenticated
-  using (
-    (organization_id = public.current_org_id() and (created_by = auth.uid() or public.is_org_admin()))
-    or public.is_platform_admin()
-  );
+  using (public.is_active_user());
 
-create policy "solicitudes: crear en su organización" on public.solicitudes
+create policy "configuracion: admin edita" on public.configuracion
+  for update to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+-- solicitudes
+create policy "solicitudes: usuario ve las suyas, admin todas" on public.solicitudes
+  for select to authenticated
+  using (public.is_active_user() and (created_by = auth.uid() or public.is_admin()));
+
+create policy "solicitudes: usuario activo crea a su nombre" on public.solicitudes
   for insert to authenticated
-  with check (organization_id = public.current_org_id() and created_by = auth.uid());
+  with check (public.is_active_user() and created_by = auth.uid());
 
 -- solicitud_resultados (solo admin)
-create policy "resultados: admin lee los de su organización" on public.solicitud_resultados
+create policy "resultados: admin lee" on public.solicitud_resultados
   for select to authenticated
-  using ((organization_id = public.current_org_id() and public.is_org_admin()) or public.is_platform_admin());
+  using (public.is_admin());
 
-create policy "resultados: admin revisa los de su organización" on public.solicitud_resultados
+create policy "resultados: admin revisa" on public.solicitud_resultados
   for update to authenticated
-  using (organization_id = public.current_org_id() and public.is_org_admin())
-  with check (organization_id = public.current_org_id() and public.is_org_admin());
+  using (public.is_admin())
+  with check (public.is_admin());
 
 -- lotes, webhook_events, audit_logs (solo admin, lectura)
-create policy "lotes: admin lee los de su organización" on public.lotes
+create policy "lotes: admin lee" on public.lotes
   for select to authenticated
-  using ((organization_id = public.current_org_id() and public.is_org_admin()) or public.is_platform_admin());
+  using (public.is_admin());
 
-create policy "webhooks: admin lee los de su organización" on public.webhook_events
+create policy "webhooks: admin lee" on public.webhook_events
   for select to authenticated
-  using ((organization_id = public.current_org_id() and public.is_org_admin()) or public.is_platform_admin());
+  using (public.is_admin());
 
-create policy "auditoria: admin lee la de su organización" on public.audit_logs
+create policy "auditoria: admin lee" on public.audit_logs
   for select to authenticated
-  using ((organization_id = public.current_org_id() and public.is_org_admin()) or public.is_platform_admin());
+  using (public.is_admin());
 
 -- ─── Realtime (respeta RLS) ─────────────────────────────────────────────────
 
 alter publication supabase_realtime add table public.solicitudes, public.solicitud_resultados;
 
 -- ─── Storage: reportes PDF y soportes de autorización ──────────────────────
--- Convención de rutas: {organization_id}/{solicitud_id}.pdf
+-- Rutas: reportes/{solicitud_id}.pdf · autorizaciones/{user_id}/{archivo}
 
 insert into storage.buckets (id, name, public)
 values ('reportes', 'reportes', false), ('autorizaciones', 'autorizaciones', false);
 
-create policy "reportes: admin lee los de su organización" on storage.objects
+create policy "reportes: admin lee" on storage.objects
   for select to authenticated
-  using (
-    bucket_id = 'reportes'
-    and (storage.foldername(name))[1] = public.current_org_id()::text
-    and public.is_org_admin()
-  );
+  using (bucket_id = 'reportes' and public.is_admin());
 
-create policy "autorizaciones: miembros suben a su organización" on storage.objects
+create policy "autorizaciones: usuario sube a su carpeta" on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'autorizaciones'
-    and (storage.foldername(name))[1] = public.current_org_id()::text
+    and public.is_active_user()
+    and (storage.foldername(name))[1] = auth.uid()::text
   );
 
-create policy "autorizaciones: admin lee las de su organización" on storage.objects
+create policy "autorizaciones: admin lee" on storage.objects
   for select to authenticated
-  using (
-    bucket_id = 'autorizaciones'
-    and (storage.foldername(name))[1] = public.current_org_id()::text
-    and public.is_org_admin()
-  );
+  using (bucket_id = 'autorizaciones' and public.is_admin());

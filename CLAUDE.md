@@ -2,8 +2,9 @@
 
 # ELOGIX — Guía de arranque para Claude
 
-Plataforma web de Elogia Soluciones Logísticas para estudios de antecedentes (conductores,
-vehículos, personas, empresas) sobre la API de TusDatos. El usuario y el equipo hablan español:
+Plataforma web **de uso exclusivo de Elogia** Soluciones Logísticas (no es multi-empresa) para
+estudios de antecedentes (conductores, vehículos, personas, empresas) sobre la API de TusDatos.
+Roles: `usuario` (envía la información) y `admin` (la persona de Elogia que revisa y decide). El usuario y el equipo hablan español:
 responde, comenta el código y escribe la documentación en español.
 
 ## Lee primero

@@ -18,9 +18,8 @@ import type {
 /**
  * ELOGIX — Cliente tipado de TusDatos (solo servidor).
  *
- * Se crea con credenciales explícitas para soportar una cuenta TusDatos por
- * organización (Fase 5). Para la cuenta por defecto de Elogia usa
- * `getTusDatos()` de `./index`.
+ * Se crea con credenciales explícitas (útil en pruebas). En la app usa
+ * `getTusDatos()` de `./index`, que toma la cuenta de Elogia de las variables de entorno.
  */
 
 export type TusDatosCredentials =

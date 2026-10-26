@@ -4,6 +4,9 @@
 > **Estado (2026-10-25):** Fase 2 en curso. El objetivo de negocio está en **§14** y las preguntas
 > abiertas con el experto de TusDatos en **§15**: léelas antes de tocar el modelo de datos.
 > Lo que ya cambió respecto al diseño de Fase 1 está en **§13**.
+>
+> **ELOGIX es de uso exclusivo de Elogia** (una sola empresa). No hay multi-organización ni
+> super-admin: solo los roles `usuario` y `admin`.
 
 ---
 
@@ -269,7 +272,7 @@ Filtros opcionales: `date_from` (DD-MM-YYYY), `date_to`, `user_email`, `document
 | `info` | 🔵 Azul | Informativo, sin implicación de riesgo |
 | vacío | 🟢 Verde | Sin hallazgos |
 
-Cada organización puede configurar hasta **3 categorizaciones distintas** (ej: RRHH vs Cumplimiento).
+La cuenta TusDatos puede configurar hasta **3 categorizaciones distintas** (ej: RRHH vs Cumplimiento).
 
 ---
 
@@ -351,7 +354,7 @@ InmovilizadosBogotá.
 | **Forms** | React Hook Form + Zod | Validación type-safe |
 | **Estado** | Zustand + TanStack Query | State local + server state/cache |
 | **Auth** | Supabase Auth | JWT, OAuth, magic link, RLS |
-| **DB** | Supabase PostgreSQL | Row-level security por organización |
+| **DB** | Supabase PostgreSQL | Row-level security por rol |
 | **Realtime** | Supabase Realtime | Updates en vivo del estado de consultas |
 | **Storage** | Supabase Storage | Almacén de reportes PDF |
 | **Deploy** | Vercel | Preview deployments, edge functions |
@@ -385,7 +388,6 @@ webapp_elogix/
 │   ├── (auth)/login, recuperar     # Sin sidebar. NO hay /register: los usuarios los crea el admin
 │   ├── (usuario)/solicitudes/      # Nueva solicitud + Mis solicitudes (rol usuario)
 │   ├── (admin)/                    # dashboard, estudios, lotes, usuarios, auditoria, monitoreo, configuracion
-│   ├── (plataforma)/organizaciones # Super-admin Elogia (Fase 5)
 │   ├── api/
 │   │   ├── reportes/[id]/          # Proxy autenticado del HTML/PDF de TusDatos (solo admin)
 │   │   ├── webhooks/tusdatos/      # Receptor de webhooks (Bearer TUSDATOS_WEBHOOK_TOKEN)
@@ -412,16 +414,15 @@ lo que llama un tercero o necesita un `Response` crudo: webhooks, cron y descarg
 ## 3. Diseño de Base de Datos (Supabase PostgreSQL)
 
 > Fuente de verdad: [`supabase/migrations/20261025000000_init.sql`](../supabase/migrations/20261025000000_init.sql).
-> Validada con pruebas de RLS (usuario no ve hallazgos, no puede cambiar su rol, aislamiento entre organizaciones).
+> Validada con pruebas de RLS (usuario no ve hallazgos, no puede cambiar su rol, no ve solicitudes de otros usuarios). Ver `npm run db:test`.
 
 ### 3.1 Tablas
 
 | Tabla | Contenido | Quién lee (RLS) | Quién escribe |
 |-------|-----------|-----------------|---------------|
-| `organizations` | Cliente/aliado. `tusdatos_account_email` para enrutar webhooks | Miembros de la org | Servidor |
-| `organization_secrets` | Referencia a Supabase Vault con credenciales TusDatos por org | **Nadie** (solo secret key) | Servidor |
-| `profiles` | `role` (`usuario`/`admin`), `is_platform_admin`, `active` | El propio; admin ve los de su org | Usuario: solo `full_name`. Rol/activo: servidor |
-| `solicitudes` | Datos de entrada + `estado` + `numero` (referencia SOL-000123) + autorización del titular | Usuario: las suyas. Admin: las de su org | Usuario inserta columnas de entrada; estado/jobid: servidor |
+| `profiles` | `role` (`usuario`/`admin`), `active` | El propio; admin ve todos | Usuario: solo `full_name`. Rol/activo: servidor |
+| `configuracion` | Una fila: `requiere_confirmacion_envio`, `alerta_creditos_minimos` | Usuarios activos | Admin |
+| `solicitudes` | Datos de entrada + `estado` + `numero` (referencia SOL-000123) + autorización del titular | Usuario: las suyas. Admin: todas | Usuario inserta columnas de entrada; estado/jobid: servidor |
 | `solicitud_resultados` | **Hallazgos**, fuentes, PDF, revisión (aprobado/rechazado) | **Solo admin** | Servidor; admin solo `revision_estado`/`revision_comentario` |
 | `lotes` | Batch (máx. 2000) | Solo admin | Servidor |
 | `webhook_events` | Payload crudo de cada webhook | Solo admin | Servidor |
@@ -436,14 +437,15 @@ navegador, un `usuario` podría hacer `supabase.from('solicitudes').select('*')`
 la base de datos, no la UI.
 
 ### 3.3 Patrones de seguridad aplicados
-- Helpers `current_org_id()`, `is_org_admin()`, `is_platform_admin()` como `security definer`
+- Helpers `is_active_user()` e `is_admin()` como `security definer`
   (evitan la recursión de políticas sobre `profiles`). Un perfil `active = false` pierde acceso a todo.
 - `revoke all` + `GRANT` por columna: las políticas filtran filas, los grants limitan columnas.
-- `organization_id` y `created_by` se rellenan con `default` desde la sesión: el cliente no los elige.
+- `created_by` se rellena con `default auth.uid()` desde la sesión: el cliente no lo elige.
 - `revisado_por`/`revisado_at` los pone un trigger, no el cliente.
 - Perfil creado por trigger desde `app_metadata` (solo escribible con la secret key).
 - Constraint por tipo de documento (CE/PPT exigen fecha, PP/INT exigen nombre, PLACA exige placa + propietario).
-- Buckets privados `reportes` y `autorizaciones` con rutas `{organization_id}/...`.
+- Buckets privados `reportes` (solo admin) y `autorizaciones` (cada usuario sube a `{user_id}/...`).
+- Las credenciales de TusDatos son una sola cuenta de Elogia y viven en variables de entorno (Vercel).
 
 ---
 
@@ -520,12 +522,13 @@ verifica rol admin y reenvía el contenido (y guarda copia del PDF en Storage).
 
 ## 7. Roles y Permisos
 
-> ⚠️ MODELO CONFIRMADO — Solo 2 roles activos por organización: `usuario` y `admin`.
+> ⚠️ MODELO CONFIRMADO — App exclusiva de Elogia con solo 2 roles: `usuario` y `admin`.
+> Los permisos exactos de cada rol se terminan de definir con las respuestas de §15.
 
 ### 7.1 Usuario (rol: `usuario`)
 
-Es la persona que **origina la solicitud** de validación. Puede ser un colaborador de Elogia o un
-contacto de una empresa cliente. Su función es únicamente **ingresar datos** para solicitar
+Es la persona que **origina la solicitud** de validación. Quién es exactamente (personal de Elogia,
+contactos de clientes o ambos) está por confirmar en §15. Su función es únicamente **ingresar datos** para solicitar
 un estudio de antecedentes.
 
 **Capacidades:**
@@ -547,13 +550,12 @@ un estudio de antecedentes.
 
 ### 7.2 Administrador (rol: `admin`)
 
-Es el **super usuario** de la organización. Tiene acceso completo a ELOGIX. Típicamente es
-un miembro del equipo de Elogia o el responsable de cumplimiento de la empresa cliente.
+Es la persona de Elogia que hoy hace el flujo completo en TusDatos. Tiene acceso completo a ELOGIX.
 
 **Capacidades — Todo lo del usuario, más:**
 
 **Gestión de validaciones:**
-- Ver todas las solicitudes de todos los usuarios de su organización
+- Ver todas las solicitudes de todos los usuarios
 - Revisar resultados completos: hallazgos, nivel de riesgo (alto/medio/bajo/info)
 - Abrir y descargar el reporte de TusDatos (HTML + PDF)
 - Aprobar o rechazar un estudio de antecedentes
@@ -577,7 +579,7 @@ un miembro del equipo de Elogia o el responsable de cumplimiento de la empresa c
 - Ver el estado operativo de las fuentes de TusDatos
 
 **Configuración del sistema:**
-- Gestionar API Keys / Tokens de TusDatos de la organización
+- Ver el estado de la cuenta TusDatos de Elogia (las credenciales viven en variables de entorno)
 - Configurar el webhook receptor
 - Ver y gestionar créditos disponibles
 - Recibir alertas de PEPs monitoring
@@ -724,7 +726,7 @@ un miembro del equipo de Elogia o el responsable de cumplimiento de la empresa c
 - Historial de lotes con descarga
 
 **Gestión de Usuarios:**
-- Lista de todos los usuarios de la organización
+- Lista de todos los usuarios
 - Crear nuevo usuario (nombre, email, contraseña inicial, rol)
 - Activar / desactivar usuario (toggle)
 - Cambiar rol: usuario ↔ admin
@@ -745,7 +747,7 @@ un miembro del equipo de Elogia o el responsable de cumplimiento de la empresa c
 - Log de webhooks recibidos de TusDatos
 
 **Configuración del sistema:**
-- Gestión de API Keys / Tokens TusDatos de la organización
+- Requiere confirmación antes de enviar (sí/no) y umbral de alerta de créditos
 - Configuración de webhook receptor (URL + auth + eventos a suscribir)
 - Créditos: saldo, historial de consumo, alertas de umbral
 - Notificaciones por email
@@ -762,8 +764,8 @@ Ver [`ELOGIX_ROADMAP.md`](./ELOGIX_ROADMAP.md).
 
 | # | Medida | Detalle |
 |---|--------|---------|
-| 1 | **Cifrado de credenciales** | Vercel Env Vars (cuenta Elogia) + Supabase Vault (cuentas por organización) |
-| 2 | **RLS en Supabase** | Aislamiento completo entre organizaciones |
+| 1 | **Cifrado de credenciales** | Vercel Environment Variables (cuenta TusDatos de Elogia) |
+| 2 | **RLS en Supabase** | Usuario: solo sus solicitudes y nunca resultados. Admin: todo |
 | 3 | **Rate limiting** | En API Routes para evitar abuso |
 | 4 | **CORS** | Configurado estrictamente en Next.js |
 | 5 | **Sanitización** | Entradas validadas con Zod antes de enviar a TusDatos |
@@ -779,14 +781,14 @@ Ver [`ELOGIX_ROADMAP.md`](./ELOGIX_ROADMAP.md).
 
 | Decisión | Elección | Motivo |
 |----------|----------|--------|
-| Modelo de negocio | Multi-organización | Elogia puede gestionar múltiples clientes/aliados |
-| Roles | 2 roles: `usuario` y `admin` + flag `is_platform_admin` | Usuario solo envía solicitudes; Admin revisa y gestiona; Elogia administra todas las orgs |
+| Modelo de negocio | **Solo Elogia** (una empresa, sin multi-organización) | Confirmado por el usuario; simplifica BD y permisos |
+| Roles | 2 roles: `usuario` y `admin` | Usuario envía solicitudes; Admin (persona de Elogia que opera TusDatos) revisa y decide |
 | Visibilidad de hallazgos | Solo admin, **garantizado por RLS** (tabla `solicitud_resultados`) | La UI no es una frontera de seguridad |
 | Framework | **Next.js 16** (App Router, Cache Components, `proxy.ts`) | Versión instalada; Next 15 quedó atrás |
 | Estructura | **Una sola app** (sin Turborepo) | Un solo consumidor; menos configuración |
 | Gestor de paquetes | npm | Ya había `package-lock.json`; evitar mezclar con pnpm |
 | Base de datos | Supabase PostgreSQL | Auth + RLS + Realtime + Storage |
-| Registro de usuarios | Solo por admin (signup público deshabilitado) | Plataforma B2B |
+| Registro de usuarios | Solo por admin (signup público deshabilitado) | Acceso controlado por Elogia |
 | Actualización de estados | Webhook + cron de reconciliación | Serverless no permite polling en background |
 | Cumplimiento | Autorización del titular obligatoria en cada solicitud | Ley 1581 de 2012 (Habeas Data) |
 | Deploy | Vercel | Preview deploys automáticos, Vercel Cron |
@@ -798,8 +800,8 @@ Hallazgos de la revisión del diseño de Fase 1 y cómo se corrigieron:
 | # | Problema en el diseño original | Corrección |
 |---|-------------------------------|------------|
 | 1 | Hallazgos en `validaciones`, tabla que el usuario puede leer → fuga vía API de Supabase | Tabla `solicitud_resultados` solo-admin |
-| 2 | `profiles.role` con 4 roles (`viewer`, `operator`…) contradecía el modelo de 2 roles | Enum `app_role` + `is_platform_admin` |
-| 3 | `tusdatos_api_token` en `organizations` (legible por miembros) | `organization_secrets` sin políticas + Vault |
+| 2 | `profiles.role` con 4 roles (`viewer`, `operator`…) contradecía el modelo de 2 roles | Enum `app_role` (`usuario`/`admin`) |
+| 3 | `tusdatos_api_token` en `organizations` (legible por miembros) | Sin multi-organización: una cuenta, en variables de entorno |
 | 4 | Política RLS con subconsulta a `profiles` (recursión) y sin `WITH CHECK` | Helpers `security definer` + grants por columna |
 | 5 | Polling cada 3 s "en background" | Webhook + `after()` + Vercel Cron |
 | 6 | iframe al reporte de TusDatos (requiere Basic Auth) | Proxy autenticado `/api/reportes/[id]` |
@@ -810,6 +812,7 @@ Hallazgos de la revisión del diseño de Fase 1 y cómo se corrigieron:
 | 11 | Faltaban tabla de auditoría, estado de revisión y usuarios activos/inactivos | `audit_logs`, `revision_estado`, `profiles.active` |
 | 12 | Página `register/` en un sistema B2B | Eliminada; el admin crea usuarios |
 | 13 | Sin evidencia de autorización del titular | `autorizacion_titular` obligatoria + bucket `autorizaciones` |
+| 14 | Multi-organización + super-admin, innecesarios: la app es solo para Elogia | Eliminados `organizations`, `organization_id`, `is_platform_admin`; tabla `configuracion` global |
 
 ---
 
@@ -837,7 +840,7 @@ La decisión final **siempre es humana** (admin). El sistema prepara, ordena y s
 | # | Propuesta | Estado |
 |---|-----------|--------|
 | P1 | **Envío automático** a TusDatos al crear la solicitud (máximo ahorro de trabajo). | Recomendado |
-| P2 | Ajuste por organización `requiere_confirmacion_envio`: si está activo, las solicitudes quedan en "por confirmar" y el admin las confirma **en lote** antes de gastar créditos. | Recomendado |
+| P2 | Ajuste global `configuracion.requiere_confirmacion_envio` (ya existe en la BD): si está activo, las solicitudes quedan en "por confirmar" y el admin las confirma **en lote** antes de gastar créditos. | Recomendado |
 | P3 | Controles de créditos: validación Zod por tipo de documento, **detección de duplicados** (reutilizar resultado reciente en vez de relanzar), límite diario por usuario, alerta de créditos bajos. | Recomendado |
 | P4 | Bandeja del admin ordenada por riesgo: alto/medio primero; **aprobación en lote** de los "sin hallazgo". | Recomendado |
 | P5 | **Estudio ≠ consulta**: un estudio (p.ej. "Estudio de conductor") agrupa varias consultas TusDatos y se aprueba como un todo. Ver 14.3. | Requiere cambio de esquema |
@@ -859,7 +862,7 @@ Esquema propuesto (reemplaza `solicitudes` / `solicitud_resultados`):
 
 ```
 estudios                      ← lo que crea el usuario y aprueba el admin
-  id, numero (EST-000123), organization_id, created_by,
+  id, numero (EST-000123), created_by,
   tipo_estudio ('conductor' | 'vehiculo' | 'persona' | 'empresa' | …),
   datos jsonb (formulario completo), autorizacion_titular,
   estado ('por_confirmar' | 'enviado' | 'procesando' | 'listo_para_revision' | 'aprobado' | 'rechazado' | 'error')
@@ -876,7 +879,7 @@ estudio_resultados            ← SOLO admin
 ```
 
 Las reglas de seguridad de §3 se mantienen igual (resultados en tabla solo-admin, grants por
-columna, `organization_id` desde la sesión). La migración inicial aún no se ha aplicado en ningún
+columna, `created_by` desde la sesión). La migración inicial aún no se ha aplicado en ningún
 entorno, así que **se puede reescribir** en lugar de crear una migración nueva.
 
 ---
@@ -891,9 +894,9 @@ Quien hoy opera TusDatos en Elogia conoce el flujo real. Respuestas necesarias a
 4. **Créditos:** ¿relanzar una cédula ya consultada (`force: false`) cobra crédito? ¿Cuánto tiempo es válido un estudio antes de repetirlo?
 5. **Aprobación en TusDatos:** ¿hoy aprueban/rechazan dentro del panel de TusDatos? (Existe el webhook `reportApprovalChanged`; se podría sincronizar.)
 6. **Confirmación previa:** ¿prefiere que todo se envíe automático o revisar antes de gastar créditos? ¿Depende del cliente?
-7. **Quién es "usuario":** ¿son clientes externos de Elogia, personal interno, o ambos? ¿Cada cliente es una organización separada?
+7. **Quién es "usuario":** ¿son personal interno de Elogia, contactos de clientes, o ambos? ¿Hace falta registrar a qué empresa cliente pertenece cada usuario (un simple campo `empresa` en el perfil, para filtros y reportes)?
 8. **Qué ve el usuario al final:** ¿solo Aprobado/Rechazado, o también un comentario del admin?
-9. **Cuenta TusDatos:** ¿una sola cuenta de Elogia para todos los clientes, o cada cliente tiene la suya?
+9. **Permisos del usuario:** ¿qué más debe poder hacer o ver (p.ej. adjuntar documentos, cancelar una solicitud, ver un comentario del admin)?
 
 ---
 
