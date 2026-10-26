@@ -886,15 +886,20 @@ entorno, así que **se puede reescribir** en lugar de crear una migración nueva
 
 ## 15. Pendiente por Confirmar Keyner de TusDatos (Elogia)
 
-Quien hoy opera TusDatos en Elogia conoce el flujo real. Respuestas necesarias antes de la Fase 3:
+Quien hoy opera TusDatos en Elogia (Keyner, el futuro `admin`) conoce el flujo real. Respuestas
+necesarias antes de la Fase 3. Preguntas 1-6 y 8 enviadas por WhatsApp el 2026-10-25; registra aquí
+sus respuestas.
+
+**Ya respondido (por el usuario):** quienes envían solicitudes son **coordinadores de Elogia**
+(personal interno). No hace falta registrar empresa cliente por usuario. Esto cierra la pregunta 7.
 
 1. **Tipos de estudio:** ¿qué estudios hacen (conductor, vehículo, propietario, empresa transportadora, otros)? ¿Qué consultas TusDatos lleva cada uno?
 2. **Datos de entrada:** ¿con qué datos llega hoy cada solicitud? ¿Llegan adjuntos (licencia, tarjeta de propiedad, autorización firmada)?
 3. **Criterios de decisión:** ¿cómo decide aprobar o rechazar? ¿Hay reglas (p.ej. "alto = rechazo", "multas pendientes = condicionado")? ¿Existe un estado "aprobado con observaciones"?
 4. **Créditos:** ¿relanzar una cédula ya consultada (`force: false`) cobra crédito? ¿Cuánto tiempo es válido un estudio antes de repetirlo?
 5. **Aprobación en TusDatos:** ¿hoy aprueban/rechazan dentro del panel de TusDatos? (Existe el webhook `reportApprovalChanged`; se podría sincronizar.)
-6. **Confirmación previa:** ¿prefiere que todo se envíe automático o revisar antes de gastar créditos? ¿Depende del cliente?
-7. **Quién es "usuario":** ¿son personal interno de Elogia, contactos de clientes, o ambos? ¿Hace falta registrar a qué empresa cliente pertenece cada usuario (un simple campo `empresa` en el perfil, para filtros y reportes)?
+6. **Confirmación previa:** ¿prefiere que se envíe solo a TusDatos cuando el usuario manda la información, o revisar primero en su vista de admin antes de gastar créditos?
+7. ~~**Quién es "usuario":**~~ ✅ Coordinadores de Elogia (personal interno). Sin campo `empresa`.
 8. **Qué ve el usuario al final:** ¿solo Aprobado/Rechazado, o también un comentario del admin?
 9. **Permisos del usuario:** ¿qué más debe poder hacer o ver (p.ej. adjuntar documentos, cancelar una solicitud, ver un comentario del admin)?
 
