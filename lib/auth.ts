@@ -54,5 +54,5 @@ export async function requireAdmin(): Promise<CurrentUser> {
 
 /** Ruta de inicio según el rol. */
 export function homePathFor(user: CurrentUser) {
-  return user.role === "admin" ? "/dashboard" : "/solicitudes";
+  return user.role === "admin" ? "/dashboard" : "/inicio";
 }

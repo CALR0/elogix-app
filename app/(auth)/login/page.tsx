@@ -1,7 +1,17 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { FileSearch, MapPin, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { cacheLife } from "next/cache";
+import {
+  FileSearch,
+  FlaskConical,
+  MapPin,
+  ShieldCheck,
+  ShieldUser,
+  User,
+} from "lucide-react";
 import logo from "@/public/brand/elogia-logo.svg";
+import { MODO_DEMO } from "@/lib/demo";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
@@ -55,14 +65,36 @@ export default function LoginPage() {
           <p className="text-muted-foreground mt-8 text-center text-xs">
             ¿No tienes acceso? Solicítalo al administrador de la plataforma.
           </p>
+
+          {MODO_DEMO && (
+            <div className="mt-8 border-t border-dashed pt-6">
+              <p className="text-muted-foreground mb-3 flex items-center justify-center gap-1.5 text-[11px] font-medium tracking-[0.15em] uppercase">
+                <FlaskConical className="size-3.5" aria-hidden />
+                Acceso de prueba
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  href="/inicio"
+                  className="hover:bg-secondary flex h-10 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors"
+                >
+                  <User className="size-4" aria-hidden />
+                  Usuario
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="hover:bg-secondary flex h-10 items-center justify-center gap-2 rounded-lg border text-sm font-medium transition-colors"
+                >
+                  <ShieldUser className="size-4" aria-hidden />
+                  Administrador
+                </Link>
+              </div>
+            </div>
+          )}
         </section>
 
         {/* Mensaje de marca: el recorrido del estudio como un itinerario de viaje */}
         <section className="hidden text-white lg:block">
-          <p className="text-brand text-xs font-medium tracking-[0.25em] uppercase">
-            Elogia · Soluciones logísticas
-          </p>
-          <h2 className="mt-5 max-w-xl text-4xl leading-[1.15] font-semibold tracking-tight xl:text-5xl">
+          <h2 className="max-w-xl text-4xl leading-[1.15] font-semibold tracking-tight xl:text-5xl">
             Cada conductor verificado antes de tomar la ruta.
           </h2>
 
@@ -89,8 +121,8 @@ export default function LoginPage() {
         </section>
       </div>
 
-      <p className="absolute right-8 bottom-6 hidden text-xs text-white/40 lg:block">
-        © Elogia Soluciones Logísticas
+      <p className="text-muted-foreground absolute inset-x-0 bottom-5 text-center text-xs tabular-nums lg:text-white/45">
+        <AnioActual /> © Elogia Soluciones Logísticas
       </p>
     </main>
   );
@@ -125,4 +157,14 @@ function RutasDecorativas() {
       </g>
     </svg>
   );
+}
+
+/**
+ * Año actual del pie. Con Cache Components no se puede leer la hora durante el
+ * prerender sin decidir cómo cachearla: se cachea un día (cambia solo en enero).
+ */
+async function AnioActual() {
+  "use cache";
+  cacheLife("days");
+  return <>{new Date().getFullYear()}</>;
 }
