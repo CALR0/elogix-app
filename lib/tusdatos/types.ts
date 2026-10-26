@@ -149,3 +149,8 @@ export interface IndividualCompletedEvent {
 
 export type ReportKind = "persona" | "nit" | "vehiculo";
 export type ReportFormat = "html" | "pdf";
+
+/** Resultado de descargar un reporte: el PDF puede estar aún en generación (HTTP 202). */
+export type ReportResult =
+  | { status: "ready"; response: Response }
+  | { status: "processing"; retryAfterSeconds: number };

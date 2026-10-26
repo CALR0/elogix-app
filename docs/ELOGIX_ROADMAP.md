@@ -23,6 +23,7 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 | 2026-10-25 | Fase 2 (a) | Revisión de arquitectura (13 correcciones, ver contexto §13). Monorepo aplanado a la raíz, `docs/`. Migración + RLS + pruebas PGlite. SDK TusDatos reescrito. `env.ts`, `auth.ts`, clientes Supabase, `proxy.ts`, tokens de diseño, headers de seguridad |
 | 2026-10-25 | Fase 2 (b) | Definido el objetivo de negocio (contexto §14), propuesta Estudio → Consultas (§14.3), preguntas para el experto TusDatos (§15). `CLAUDE.md` de arranque. Prueba RLS movida al repo (`scripts/test-rls.mjs`) |
 | 2026-10-25 | Fase 2 (c) | Flujo de trabajo: todo en la nube (local → Supabase nube → Vercel), sin Docker. Git inicializado (`CALR0/elogix-app`). **App solo para Elogia:** eliminada la multi-organización y `is_platform_admin`; tabla `configuracion` global; 22 pruebas RLS |
+| 2026-10-25 | Fase 2 (d) | Preguntas enviadas a Keyner (§15; la 7 ya respondida: usuarios = coordinadores de Elogia). SDK: PDF asíncrono (HTTP 202) con `fetchReport`/`fetchReportWhenReady`. Documentado qué entrega TusDatos y la propuesta de copiar el PDF solo al decidir (§14.4) |
 
 ---
 
@@ -93,6 +94,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 - [ ] **Envío automático** a TusDatos + ajuste global `requiere_confirmacion_envio` con confirmación en lote *(§14 P1-P2)*
 - [ ] **Control de créditos:** duplicados, límite diario por usuario, alerta de saldo bajo *(§14 P3)*
 - [ ] **Bandeja por riesgo** + aprobación en lote de "sin hallazgo" *(§14 P4)*
+- [ ] **Revisor del admin:** vista propia con `report_json` + reporte oficial embebido; copia del PDF en Storage al aprobar/rechazar *(§14.4 P8)*
 - [ ] **Decisión sugerida** por reglas, si el experto define criterios *(§14 P6)*
 - [ ] Usuario ve el resultado final (Aprobado / Rechazado / En revisión), nunca hallazgos *(§14 P7)*
 - [ ] **Auth**

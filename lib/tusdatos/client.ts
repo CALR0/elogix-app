@@ -10,6 +10,7 @@ import type {
   PlansResponse,
   ReportFormat,
   ReportKind,
+  ReportResult,
   RetryResponse,
   SourcesStatusResponse,
   WebhookConfigInput,
@@ -117,6 +118,39 @@ export function createTusDatosClient({
 
   const enc = encodeURIComponent;
 
+  /**
+   * Descarga el reporte HTML o PDF. Los endpoints exigen las credenciales de
+   * TusDatos, así que NUNCA se enlazan desde el navegador: un Route Handler
+   * de ELOGIX verifica que el usuario sea admin y reenvía el Response.
+   *
+   * El PDF se genera de forma asíncrona: mientras no está listo TusDatos
+   * responde 202 + `Retry-After` (≈10 s). En ese caso devuelve
+   * `{ status: "processing" }` en lugar de un Response con JSON.
+   */
+  async function fetchReport(
+    reportId: string,
+    kind: ReportKind,
+    format: ReportFormat,
+  ): Promise<ReportResult> {
+    const res = await request(
+      `${REPORT_PATHS[kind][format]}/${enc(reportId)}`,
+      {
+        headers: {
+          Accept: format === "pdf" ? "application/pdf" : "text/html",
+        },
+      },
+    );
+    if (res.status === 202) {
+      await res.body?.cancel();
+      const retryAfter = Number(res.headers.get("Retry-After"));
+      return {
+        status: "processing",
+        retryAfterSeconds: retryAfter > 0 ? retryAfter : 10,
+      };
+    }
+    return { status: "ready", response: res };
+  }
+
   return {
     /** POST /api/launch — lanza una consulta individual. Devuelve un jobid (vigencia 2 h). */
     launchIndividual(input: LaunchIndividualInput) {
@@ -152,15 +186,31 @@ export function createTusDatosClient({
       return json<Record<string, unknown>>(`/api/report_json/${enc(reportId)}`);
     },
 
+    fetchReport,
+
     /**
-     * Descarga el reporte HTML o PDF. Los endpoints exigen las credenciales de
-     * TusDatos, así que NUNCA se enlazan desde el navegador: un Route Handler
-     * de ELOGIX verifica que el usuario sea admin y reenvía este Response.
+     * Igual que `fetchReport`, pero si el reporte está en proceso espera lo que
+     * indique `Retry-After` y reintenta. Pensado para tareas en segundo plano
+     * (`after()`, cron); en una petición del navegador usa `fetchReport` y
+     * muestra "generando PDF…" al usuario.
      */
-    fetchReport(reportId: string, kind: ReportKind, format: ReportFormat) {
-      return request(`${REPORT_PATHS[kind][format]}/${enc(reportId)}`, {
-        headers: { Accept: format === "pdf" ? "application/pdf" : "text/html" },
-      });
+    async fetchReportWhenReady(
+      reportId: string,
+      kind: ReportKind,
+      format: ReportFormat,
+      { maxAttempts = 4 }: { maxAttempts?: number } = {},
+    ): Promise<ReportResult> {
+      let result = await fetchReport(reportId, kind, format);
+      for (
+        let attempt = 1;
+        attempt < maxAttempts && result.status === "processing";
+        attempt++
+      ) {
+        const waitMs = result.retryAfterSeconds * 1000;
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        result = await fetchReport(reportId, kind, format);
+      }
+      return result;
     },
 
     /** GET /api/plans — créditos restantes */

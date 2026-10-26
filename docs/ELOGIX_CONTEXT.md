@@ -846,6 +846,25 @@ La decisión final **siempre es humana** (admin). El sistema prepara, ordena y s
 | P5 | **Estudio ≠ consulta**: un estudio (p.ej. "Estudio de conductor") agrupa varias consultas TusDatos y se aprueba como un todo. Ver 14.3. | Requiere cambio de esquema |
 | P6 | Reglas de **decisión sugerida** (p.ej. "hallazgo alto ⇒ sugerir rechazo") si el experto tiene criterios claros. | Depende de §15 |
 | P7 | El usuario ve el **resultado final** del estudio (Aprobado / Rechazado / En revisión), nunca los hallazgos. | Recomendado |
+| P8 | **Copia del PDF en Storage solo al aprobar/rechazar** (no por cada consulta). Ver 14.4. | Recomendado, no implementado |
+
+### 14.4 Reportes: qué entrega TusDatos y copia del PDF
+
+TusDatos devuelve tres niveles (ver `docs/openapi.json`):
+- `GET /api/results/{jobid}` — resumen: estado, nivel de hallazgo, `{ fuente: true | false | "Error" }`. Alimenta el semáforo.
+- `GET /api/report_json/{id}` — detalle: `dict_hallazgos` por nivel (`codigo`, `fuente`, `hallazgo`, `descripcion`) y datos de cada fuente. Usar siempre `codigo` (estable; el texto puede cambiar). Catálogo: `GET /api/fuentes-disponibles`.
+- Visual ya hecho por TusDatos: HTML (`/api/v2/report*`) y PDF (`/api/v2/report*_pdf`), más capturas de evidencia en `static.tusdatos.co/static/img/{dest}/{fuente}.jpg`.
+
+**Vista del admin:** propia de ELOGIX construida con el JSON (rápida de revisar) + reporte oficial embebido y descargable como respaldo.
+
+**PDF asíncrono:** el PDF responde `202` + `Retry-After` mientras se genera. El SDK lo maneja:
+`fetchReport()` devuelve `{ status: "processing" }` y `fetchReportWhenReady()` espera y reintenta (para `after()`/cron).
+
+**¿Guardar copia del PDF?** Costo bajo: un PDF pesa ~0,2–1 MB, Supabase Free incluye 1 GB y Pro 100 GB
+(≈ miles de reportes por GB). Beneficio: evidencia inmutable de **qué vio el admin al decidir** (auditoría),
+no depender de que TusDatos conserve el reporte, y descargas más rápidas. Por eso se propone guardar el PDF
+**solo cuando el admin aprueba o rechaza** (`reportes/{solicitud_id}.pdf`, columna `reporte_pdf_path` ya existe),
+no en cada consulta. Confirmar con Keyner si necesitan conservar los reportes y por cuánto tiempo.
 
 ### 14.3 Cambio de modelo propuesto: Estudio → Consultas (NO implementado aún)
 
