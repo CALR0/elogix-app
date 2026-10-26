@@ -47,6 +47,13 @@ decisión. El proyecto se trabaja desde varios computadores: esos documentos son
 - La aprobación final de un estudio es siempre humana (admin).
 - Si cambias la migración, actualiza y corre `npm run db:test`.
 
+## Diseño UI/UX (ver contexto §8)
+- Corporativo, serio y elegante; gama **verde ecológica de Elogia**, ambientado en transporte/logística.
+  Nada genérico (no el look por defecto de shadcn) ni infantil; sin emojis en la interfaz.
+- Rápido en PCs lentos y móvil: Server Components por defecto, sin Framer Motion ni glassmorphism,
+  transiciones CSS cortas, gráficas con carga diferida, paginación en servidor. Mobile-first.
+- El semáforo de hallazgos siempre lleva icono + texto, nunca solo color.
+
 ## Mapa del código
 - `lib/env.ts` — variables de servidor validadas con Zod (perezoso, no rompe el build).
 - `lib/auth.ts` — Data Access Layer (`getCurrentUser`, `requireUser`, `requireAdmin`, `homePathFor`).

@@ -24,6 +24,7 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 | 2026-10-25 | Fase 2 (b) | Definido el objetivo de negocio (contexto §14), propuesta Estudio → Consultas (§14.3), preguntas para el experto TusDatos (§15). `CLAUDE.md` de arranque. Prueba RLS movida al repo (`scripts/test-rls.mjs`) |
 | 2026-10-25 | Fase 2 (c) | Flujo de trabajo: todo en la nube (local → Supabase nube → Vercel), sin Docker. Git inicializado (`CALR0/elogix-app`). **App solo para Elogia:** eliminada la multi-organización y `is_platform_admin`; tabla `configuracion` global; 22 pruebas RLS |
 | 2026-10-25 | Fase 2 (d) | Preguntas enviadas a Keyner (§15; la 7 ya respondida: usuarios = coordinadores de Elogia). SDK: PDF asíncrono (HTTP 202) con `fetchReport`/`fetchReportWhenReady`. Documentado qué entrega TusDatos y la propuesta de copiar el PDF solo al decidir (§14.4) |
+| 2026-10-25 | Fase 2 (e) | Nueva dirección de diseño (contexto §8): corporativo, verde ecológico de Elogia, ambientado en transporte, sin Framer Motion ni glassmorphism, rendimiento para PCs lentos y móvil. Tokens de `globals.css` aún azules (pendiente) |
 
 ---
 
@@ -70,7 +71,8 @@ Incluye la revisión de arquitectura de Fase 1 (ver `ELOGIX_CONTEXT.md` §13).
 - [x] Design tokens (paleta ELOGIX + semáforo de hallazgos, nombres compatibles con shadcn), Inter, `lang="es"`
 - [x] Security headers en `next.config.ts`
 - [x] Inicializar git + primer commit (repo: github.com/CALR0/elogix-app)
-- [ ] Instalar shadcn/ui (`npx shadcn@latest init`) sobre los tokens existentes
+- [ ] Reemplazar los tokens azules provisionales de `app/globals.css` por la paleta verde de §8 (pedir logo/manual de marca de Elogia)
+- [ ] Instalar shadcn/ui (`npx shadcn@latest init`) y personalizarlo con esos tokens
 - [ ] **(Tú)** Crear proyecto en Supabase y llenar `.env.local`
 - [x] Repo en GitHub creado y git listo (falta tu `git push`)
 - [ ] **(Tú, guiado)** Aplicar migración: `npx supabase link` + `npm run db:push` (sin BD local: todo contra la nube)

@@ -329,7 +329,7 @@ InmovilizadosBogotá.
 +----------------------+-----------------------------------+
 |   Frontend (React)   |      Backend (Next.js API)        |
 |   Next.js App Router |  Server Functions / Route Handlers|
-|   Framer Motion      |      TusDatos API proxy           |
+|   CSS transitions    |      TusDatos API proxy           |
 |   shadcn/ui          |      Webhook receiver             |
 +----------------------+-----------------------------------+
 |                       Supabase                           |
@@ -346,10 +346,10 @@ InmovilizadosBogotá.
 | **Framework** | Next.js 16 (App Router, Cache Components) | SSR, Server Functions, `proxy.ts`, Vercel-native |
 | **Lenguaje** | TypeScript 5.x | Type safety end-to-end |
 | **UI** | React 19 + shadcn/ui | Componentes accesibles y personalizables |
-| **Animaciones** | Framer Motion | Microanimaciones premium |
-| **Estilos** | Tailwind CSS v4 + CSS Variables | Design tokens, dark mode, glassmorphism |
+| **Animaciones** | Transiciones CSS (sin Framer Motion) | Livianas para PCs lentos y móvil (§8.5) |
+| **Estilos** | Tailwind CSS v4 + CSS Variables | Tokens de la paleta verde Elogia, modo claro/oscuro (§8) |
 | **Iconos** | Lucide React | Consistente y liviano |
-| **Gráficas** | Recharts | Dashboard analytics |
+| **Gráficas** | Recharts (carga diferida) | Solo en el dashboard del admin |
 | **Tablas** | TanStack Table v8 | Virtual scroll, filtrado, ordenamiento |
 | **Forms** | React Hook Form + Zod | Validación type-safe |
 | **Estado** | Zustand + TanStack Query | State local + server state/cache |
@@ -605,53 +605,82 @@ Es la persona de Elogia que hoy hace el flujo completo en TusDatos. Tiene acceso
 
 ---
 
-## 8. Identidad Visual ELOGIX
+## 8. Identidad Visual y Principios de UI/UX
 
-### Paleta de Colores
+> **Dirección definida por el usuario (2026-10-25):** plataforma **corporativa, seria y elegante**,
+> con gama **verde / ecológica alusiva a Elogia** y ambientada en **transporte y logística**. Nada
+> genérico (no el look por defecto de shadcn/Tailwind) y nada infantil. Debe ir **rápido en PCs lentos
+> y en móvil**. Esto reemplaza la propuesta anterior (azul eléctrico, dark navy, glassmorphism).
+>
+> ⚠️ Los tokens de `app/globals.css` aún son los azules provisionales: hay que reemplazarlos por esta
+> paleta. **Pendiente:** pedir al usuario el logo y el manual de marca de Elogia (si existe) para
+> ajustar los tonos exactos.
 
-```css
-:root {
-  /* Primary — Electric Blue (tecnológico, confiable) */
-  --color-primary:       hsl(217, 91%, 55%);   /* #2B7FEC */
-  --color-primary-dark:  hsl(217, 91%, 42%);
-  --color-primary-light: hsl(217, 91%, 70%);
+### 8.1 Concepto
+"Logística sostenible": sobria, confiable y precisa, como un tablero de control de flota. El verde
+transmite la identidad ecológica de Elogia; el gris asfalto/carbón da seriedad; el contexto de
+transporte se sugiere con detalles (iconografía, líneas de ruta), nunca con ilustraciones caricaturescas.
 
-  /* Secondary — Cyan (vínculo con Elogia logística) */
-  --color-secondary:     hsl(188, 89%, 44%);   /* #0BBCD4 */
+### 8.2 Paleta (propuesta inicial, ajustar con la marca de Elogia)
 
-  /* Backgrounds — Dark Navy */
-  --color-bg-primary:    hsl(222, 47%, 7%);    /* #080E1B */
-  --color-bg-secondary:  hsl(222, 40%, 11%);   /* #111929 */
-  --color-bg-tertiary:   hsl(222, 35%, 16%);   /* #1A2538 */
+**Modo claro (por defecto: oficina, sesiones largas, mejor legibilidad):**
 
-  /* Glassmorphism */
-  --glass-bg:            hsla(222, 40%, 16%, 0.6);
-  --glass-border:        hsla(217, 91%, 55%, 0.15);
+| Token | Uso | Color |
+|-------|-----|-------|
+| `--primary` | Botones principales, enlaces, estado activo | Verde bosque `#1F6F4A` |
+| `--primary-hover` | Hover / presionado | `#17573A` |
+| `--secondary` | Fondos suaves de selección, chips | Verde salvia `#E3EFE7` |
+| `--accent` | Detalles de marca, gráficas | Verde hoja `#3E9B66` |
+| `--foreground` | Texto principal | Carbón asfalto `#1C2622` |
+| `--muted-foreground` | Texto secundario | `#5B6B64` |
+| `--background` | Fondo de la app | Blanco con matiz verde `#F5F8F6` |
+| `--card` | Superficies (tarjetas, tablas) | `#FFFFFF` |
+| `--border` | Bordes y divisores | `#DCE5DF` |
 
-  /* Hallazgos — Semáforo */
-  --color-alto:          hsl(0, 84%, 60%);     /* #EF4444 Rojo */
-  --color-medio:         hsl(38, 92%, 50%);    /* #F59E0B Naranja */
-  --color-bajo:          hsl(47, 96%, 53%);    /* #FBBF24 Amarillo */
-  --color-info:          hsl(213, 94%, 68%);   /* #60A5FA Azul claro */
-  --color-sin-hallazgo:  hsl(142, 71%, 45%);   /* #22C55E Verde */
+**Modo oscuro (opcional):** fondo `#0E1613`, superficies `#15201B`, bordes `#24332C`,
+texto `#E4ECE7`, primario `#4CB782`.
 
-  /* Texto */
-  --color-text-primary:   hsl(213, 31%, 91%);
-  --color-text-secondary: hsl(215, 20%, 65%);
-}
-```
+**Semáforo de hallazgos** (distinto del verde de marca para no confundir "marca" con "sin hallazgo"):
 
-### Tipografía
-- **Fuente:** Inter (Google Fonts)
-- **Pesos:** 300, 400, 500, 600, 700
+| Nivel | Color | Siempre acompañado de |
+|-------|-------|-----------------------|
+| Alto | `#C8372D` | Icono + texto "Alto" |
+| Medio | `#D9822B` | Icono + texto "Medio" |
+| Bajo | `#B8962A` | Icono + texto "Bajo" |
+| Info | `#2F6FA3` | Icono + texto "Info" |
+| Sin hallazgo | `#2E8B57` | Icono de check + texto |
 
-### Principios de Diseño
-- Dark mode first (modo claro opcional)
-- Glassmorphism en cards y modales
-- Gradientes sutiles en elementos destacados
-- Microanimaciones en transiciones de estado (Framer Motion)
-- Color coding consistente en hallazgos (sistema semáforo)
-- Sidebar colapsable con iconos
+El color **nunca** es el único indicador (daltonismo, pantallas de mala calidad, impresión en B/N).
+Sin emojis en la interfaz: iconos.
+
+### 8.3 Tipografía e iconografía
+- **Inter** (una sola familia variable, autoalojada con `next/font`: sin peticiones a Google ni saltos de diseño).
+  Cifras tabulares (`tabular-nums`) en tablas, montos y referencias (SOL-000123).
+- **Lucide** con imports individuales: `truck`, `route`, `map-pin`, `shield-check`, `file-search`, `id-card`, `car`.
+- Ambientación de transporte con **SVG livianos**: patrón sutil de líneas de ruta/curvas de nivel en login
+  y encabezados. Sin fotos pesadas ni ilustraciones infantiles.
+
+### 8.4 Estilo de componentes
+- shadcn/ui (Radix) **personalizado** con estos tokens: radio 8 px (sobrio), sombras mínimas,
+  bordes finos, buena densidad en tablas (el admin revisa muchas filas).
+- Jerarquía clara: una acción principal por pantalla; acciones destructivas (rechazar) separadas y con confirmación.
+- Lenguaje claro y profesional en español; mensajes de error que digan qué hacer.
+
+### 8.5 Rendimiento (PCs lentos y móvil)
+- **Server Components por defecto**; JavaScript en el cliente solo donde hay interacción (formularios, filtros).
+- **Sin Framer Motion ni glassmorphism** (`backdrop-filter` y blurs grandes son costosos en equipos
+  modestos). Transiciones CSS de 150–200 ms solo en `opacity`/`transform`; respetar `prefers-reduced-motion`.
+- Gráficas (Recharts u otra liviana) **con carga diferida** (`next/dynamic`) y solo en el dashboard del admin.
+- Tablas con **paginación en servidor** (≤ 50 filas); virtualizar solo si hace falta.
+- Presupuesto orientativo: JS inicial ≤ ~150 KB por ruta del usuario; LCP < 2,5 s en un móvil gama media
+  con 4G. Medir con Lighthouse en modo móvil y CPU ×4 más lenta.
+- Imágenes: SVG para logo e iconos; `next/image` para el resto.
+
+### 8.6 Responsive y accesibilidad
+- **Mobile-first.** El formulario del coordinador debe funcionar perfecto en el celular (puede estar en campo).
+- Admin optimizado para escritorio, usable en tablet/móvil: las tablas pasan a tarjetas y el sidebar a menú desplegable.
+- Áreas táctiles ≥ 44 px; inputs correctos (`inputmode="numeric"` para documentos, placa en mayúsculas).
+- Contraste WCAG AA, foco visible, etiquetas en todos los campos, navegable con teclado.
 
 ---
 
@@ -792,6 +821,7 @@ Ver [`ELOGIX_ROADMAP.md`](./ELOGIX_ROADMAP.md).
 | Actualización de estados | Webhook + cron de reconciliación | Serverless no permite polling en background |
 | Cumplimiento | Autorización del titular obligatoria en cada solicitud | Ley 1581 de 2012 (Habeas Data) |
 | Deploy | Vercel | Preview deploys automáticos, Vercel Cron |
+| Diseño | Corporativo, verde ecológico Elogia, ambientado en transporte; modo claro por defecto | Pedido del usuario; rendimiento en PCs lentos y móvil (§8) |
 
 ## 13. Revisión de Arquitectura — Fase 2 (2026-10-25)
 
