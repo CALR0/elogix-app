@@ -63,3 +63,15 @@ decisión. El proyecto se trabaja desde varios computadores: esos documentos son
 - `lib/tusdatos/` — SDK tipado; `createTusDatosClient(credenciales)` o `getTusDatos()` (cuenta Elogia).
 - `supabase/migrations/` — esquema + RLS. Aún no aplicada en ningún entorno: se puede reescribir.
 - `scripts/test-rls.mjs` — pruebas de RLS.
+- `lib/solicitudes/` — `schemas.ts` (Zod de los dos módulos, se reutiliza en servidor), `estados.ts`
+  (estados que ve el usuario), `mock.ts` (datos de ejemplo de las maquetas: reemplazar por Supabase).
+- `components/ui/` — componentes propios livianos (botón, campos, pastillas). `components/solicitudes/`
+  y `components/usuario/` — piezas de la sección del usuario.
+- `lib/estudios/mock.ts`, `lib/auditoria/mock.ts` — datos de ejemplo del admin (estudios, usuarios, auditoría).
+- `components/ui/paginacion.tsx` — paginación (5 por página por defecto). Hoy en el cliente; con Supabase, en servidor con `?pagina=`.
+- `lib/demo.ts` — `MODO_DEMO`: accesos de prueba en el login. Quitar al conectar Supabase Auth.
+- Rutas: usuario `/inicio`, `/solicitudes`, `/solicitudes/nueva/{documento,vehiculo}`; admin `/dashboard`, `/estudios`, `/estudios/[numero]`, `/usuarios`, `/auditoria`.
+- `components/admin/` — piezas del admin (badges del semáforo, menú, bandeja, decisión, usuarios).
+- `app/(auth)/login`, `app/(usuario)/**` y `app/(admin)/**` — hoy son **maquetas** (sin Supabase).
+- Fechas: usar `fechaCorta` de `lib/utils.ts` (no `Intl`: rompe la hidratación). Rutas con parámetros
+  dinámicos leen `params` dentro de `<Suspense>`; componentes con `usePathname` en layouts, también.

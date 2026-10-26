@@ -386,7 +386,7 @@ webapp_elogix/
 │   └── seed.sql
 ├── app/
 │   ├── (auth)/login, recuperar     # Sin sidebar. NO hay /register: los usuarios los crea el admin
-│   ├── (usuario)/solicitudes/      # Nueva solicitud + Mis solicitudes (rol usuario)
+│   ├── (usuario)/                  # inicio, solicitudes (Mis solicitudes), solicitudes/nueva/{documento,vehiculo}
 │   ├── (admin)/                    # dashboard, estudios, lotes, usuarios, auditoria, monitoreo, configuracion
 │   ├── api/
 │   │   ├── reportes/[id]/          # Proxy autenticado del HTML/PDF de TusDatos (solo admin)
@@ -884,13 +884,13 @@ La decisión final **siempre es humana** (admin). El sistema prepara, ordena y s
 
 | # | Propuesta | Estado |
 |---|-----------|--------|
-| P1 | **Envío automático** a TusDatos al crear la solicitud (máximo ahorro de trabajo). | Recomendado |
+| P1 | **Envío automático** a TusDatos al crear la solicitud (máximo ahorro de trabajo). | ✅ Confirmado (§14.5) |
 | P2 | Ajuste global `configuracion.requiere_confirmacion_envio` (ya existe en la BD): si está activo, las solicitudes quedan en "por confirmar" y el admin las confirma **en lote** antes de gastar créditos. | Recomendado |
 | P3 | Controles de créditos: validación Zod por tipo de documento, **detección de duplicados** (reutilizar resultado reciente en vez de relanzar), límite diario por usuario, alerta de créditos bajos. | Recomendado |
 | P4 | Bandeja del admin ordenada por riesgo: alto/medio primero; **aprobación en lote** de los "sin hallazgo". | Recomendado |
-| P5 | **Estudio ≠ consulta**: un estudio (p.ej. "Estudio de conductor") agrupa varias consultas TusDatos y se aprueba como un todo. Ver 14.3. | Requiere cambio de esquema |
+| P5 | ~~**Estudio ≠ consulta**~~ | ❌ Descartado: son dos módulos independientes, 1 solicitud = 1 consulta (§14.5) |
 | P6 | Reglas de **decisión sugerida** (p.ej. "hallazgo alto ⇒ sugerir rechazo") si el experto tiene criterios claros. | Depende de §15 |
-| P7 | El usuario ve el **resultado final** del estudio (Aprobado / Rechazado / En revisión), nunca los hallazgos. | Recomendado |
+| P7 | El usuario **no ve resultados ni la decisión**: solo que su envío fue exitoso y el estado del proceso, o un error con "Intentar de nuevo". | ✅ Confirmado (§14.5) |
 | P8 | **Copia del PDF en Storage solo al aprobar/rechazar** (no por cada consulta). Ver 14.4. | Recomendado, no implementado |
 
 ### 14.4 Reportes: qué entrega TusDatos y copia del PDF
@@ -911,40 +911,70 @@ no depender de que TusDatos conserve el reporte, y descargas más rápidas. Por 
 **solo cuando el admin aprueba o rechaza** (`reportes/{solicitud_id}.pdf`, columna `reporte_pdf_path` ya existe),
 no en cada consulta. Confirmar con Keyner si necesitan conservar los reportes y por cuánto tiempo.
 
-### 14.3 Cambio de modelo propuesto: Estudio → Consultas (NO implementado aún)
+### 14.3 ~~Cambio de modelo Estudio → Consultas~~ (descartado el 2026-10-26)
 
-El esquema actual (`supabase/migrations/20261025000000_init.sql`) asume **1 solicitud = 1 consulta
-TusDatos**. Un estudio de conductor en logística probablemente implica varias consultas:
+Se había propuesto agrupar varias consultas en un "estudio". Keyner confirmó que los usuarios usan
+**dos módulos independientes** (§14.5), así que se mantiene el esquema actual: **1 solicitud = 1
+consulta TusDatos** (`solicitudes` + `solicitud_resultados`), que ya soporta ambos módulos
+(`tipo_documento = 'PLACA'` para vehículo).
 
-| Consulta | Endpoint TusDatos | Datos |
-|----------|-------------------|-------|
-| Antecedentes del conductor | `POST /api/launch` (CC/CE/PPT) | Documento, fecha de expedición si aplica |
-| Vehículo + propietario | `POST /api/launch/car` | Placa, documento y tipo de doc del propietario |
-| Propietario (si ≠ conductor) | `POST /api/launch` (CC o NIT) | Documento |
+### 14.5 Flujo confirmado con Keyner (2026-10-26)
 
-Esquema propuesto (reemplaza `solicitudes` / `solicitud_resultados`):
+**Dos módulos para el usuario**, que corresponden a la sección "Consultas" de TusDatos
+(verificado en `docs/openapi.json`):
 
-```
-estudios                      ← lo que crea el usuario y aprueba el admin
-  id, numero (EST-000123), created_by,
-  tipo_estudio ('conductor' | 'vehiculo' | 'persona' | 'empresa' | …),
-  datos jsonb (formulario completo), autorizacion_titular,
-  estado ('por_confirmar' | 'enviado' | 'procesando' | 'listo_para_revision' | 'aprobado' | 'rechazado' | 'error')
-  -- visible para el usuario: SÍ (sin hallazgos)
+| Módulo en ELOGIX | Endpoint TusDatos | Datos del formulario |
+|------------------|-------------------|----------------------|
+| **Consulta por documento** | `POST /api/launch` | Tipo (CC, CE, PPT, PP, NIT) + número; fecha de expedición para CE/PPT; nombre para PP |
+| **Consulta por vehículo** | `POST /api/launch/car` | Placa (6 caracteres) + tipo (CC, CE, NIT, TI) y número del documento del propietario |
 
-estudio_consultas             ← una fila por llamada a TusDatos
-  id, estudio_id, rol ('conductor' | 'vehiculo' | 'propietario'),
-  tipo_documento, documento, placa, …, tusdatos_jobid, tusdatos_report_id, estado
-  -- visible para el usuario: NO (o solo estado)
+`INT` y `NOMBRE` también existen en `/api/launch`; no se muestran por ahora (confirmar si se usan).
 
-estudio_resultados            ← SOLO admin
-  estudio_id, hallazgo_max, resumen jsonb, decision_sugerida,
-  revision_estado, revision_comentario, revisado_por, revisado_at
-```
+**Roles:**
+- **Usuario:** registra la consulta → se envía sola a TusDatos. Solo ve "Solicitud enviada" + el
+  estado del proceso (Enviada → En proceso → Finalizada). **Nunca** ve resultados ni la decisión.
+- **Admin:** verifica que el estudio esté completo y válido, revisa resultados y aprueba/rechaza.
 
-Las reglas de seguridad de §3 se mantienen igual (resultados en tabla solo-admin, grants por
-columna, `created_by` desde la sesión). La migración inicial aún no se ha aplicado en ningún
-entorno, así que **se puede reescribir** en lugar de crear una migración nueva.
+**Errores (dos tipos distintos):**
+1. **Error al enviar** (validación, documento rechazado por TusDatos, sin créditos, TusDatos caído):
+   el usuario ve el error en el momento con **"Intentar de nuevo"**. Queda registrado para el admin.
+2. **Fuentes con error** (la consulta terminó pero `JobStatus.error = true` y `errores = [...]`): no es
+   un registro exitoso. TusDatos permite **reintentar gratis** con `GET /api/retry/{id}` ("sin descontar
+   consultas del plan"), que devuelve un nuevo `jobid`. ELOGIX lo reintenta **automáticamente** (cron,
+   máx. 3 veces); si persiste, el admin lo ve marcado y puede reintentar a mano. El usuario solo ve
+   "En proceso" mientras tanto.
+
+**Límites a respetar** (descripción de `/api/launch`): esperar **5 s entre lanzamientos** (los envíos
+se encolan y se lanzan en serie) y cada consulta tarda **~1 minuto** en promedio.
+
+### 14.6 Vehículo con remolque: cabezote + tráiler (2026-10-26)
+
+Keyner señaló que un tractocamión (cabezote) y su remolque tienen **placas distintas y pueden tener
+propietarios distintos**. TusDatos lo resuelve con la **consulta combinada de vehículo**
+(verificado en `docs/openapi.json`):
+
+| | Consulta simple | Consulta combinada |
+|---|---|---|
+| Endpoint | `POST /api/launch/car` | `POST /api/v1/batches/launch/vehicle_combo` (lote; máx. 2000) |
+| Cubre | 1 placa + su propietario | Cabezote + propietario, **remolque + su propietario**, y opcional tenedor y hasta 5 conductores |
+| Placa remolque | — | `R` o `S` + 5 dígitos (`R41130`, `S12345`) |
+| Doc. propietario remolque | — | CC, CE, NIT, PP, PPT, INT |
+| Resultado | `GET /api/results/{jobid}` | `batches/progress/{job_id}` → `batches/result/{batch_id}` (tipo `Vehiculo_Propietario`) |
+| Reporte | `/api/v2/report_car/{id}` | `/api/v2/report_combo/{id}` (⚠️ citado en la descripción pero **no** aparece en `paths` de la spec: confirmar con TusDatos) |
+| Créditos | 1 vehículo + propietario | 1 vehículo + propietario + remolque y sus personas + tenedor + conductores |
+
+**Cómo lo maneja ELOGIX:**
+- El módulo **Consulta por vehículo** tiene la opción **"Lleva remolque o tráiler"**: placa del remolque
+  y su propietario (o "mismo propietario del cabezote"). Ya está en la maqueta y en
+  `lib/solicitudes/schemas.ts`.
+- Sin remolque → `POST /api/launch/car` (como hasta ahora).
+- Con remolque → consulta combinada. Como es un endpoint de **lote** (máx. 3 lotes activos por cuenta),
+  el servidor **agrupa** las combinadas pendientes en un solo lote cada pocos minutos en vez de abrir un
+  lote por solicitud, y sigue el resultado con el webhook `batch` + cron.
+- Sigue siendo **una solicitud** para el usuario y **un estudio** para el admin, que ve en el revisor
+  las secciones cabezote, remolque y propietarios.
+- **BD (pendiente):** columnas `placa_remolque`, `tipo_doc_propietario_remolque`,
+  `documento_propietario_remolque` en `solicitudes` (o un `datos jsonb` del módulo) y `tusdatos_batch_id`.
 
 ---
 
@@ -957,14 +987,16 @@ sus respuestas.
 **Ya respondido (por el usuario):** quienes envían solicitudes son **coordinadores de Elogia**
 (personal interno). No hace falta registrar empresa cliente por usuario. Esto cierra la pregunta 7.
 
-1. **Tipos de estudio:** ¿qué estudios hacen (conductor, vehículo, propietario, empresa transportadora, otros)? ¿Qué consultas TusDatos lleva cada uno?
+1. ~~**Tipos de estudio:**~~ ✅ Dos módulos: consulta por documento y consulta por vehículo (§14.5).
 2. **Datos de entrada:** ¿con qué datos llega hoy cada solicitud? ¿Llegan adjuntos (licencia, tarjeta de propiedad, autorización firmada)?
 3. **Criterios de decisión:** ¿cómo decide aprobar o rechazar? ¿Hay reglas (p.ej. "alto = rechazo", "multas pendientes = condicionado")? ¿Existe un estado "aprobado con observaciones"?
 4. **Créditos:** ¿relanzar una cédula ya consultada (`force: false`) cobra crédito? ¿Cuánto tiempo es válido un estudio antes de repetirlo?
 5. **Aprobación en TusDatos:** ¿hoy aprueban/rechazan dentro del panel de TusDatos? (Existe el webhook `reportApprovalChanged`; se podría sincronizar.)
-6. **Confirmación previa:** ¿prefiere que se envíe solo a TusDatos cuando el usuario manda la información, o revisar primero en su vista de admin antes de gastar créditos?
+6. ~~**Confirmación previa:**~~ ✅ Se envía solo al registrar; el admin verifica después (§14.5).
 7. ~~**Quién es "usuario":**~~ ✅ Coordinadores de Elogia (personal interno). Sin campo `empresa`.
-8. **Qué ve el usuario al final:** ¿solo Aprobado/Rechazado, o también un comentario del admin?
+8. ~~**Qué ve el usuario al final:**~~ ✅ Solo envío exitoso y estado, o error con "Intentar de nuevo". Nada de resultados.
+10. **Nuevo:** ¿se usan los tipos `INT` (internacional) y `NOMBRE` en la consulta por documento?
+11. **Nuevo (remolque, §14.6):** en la consulta combinada, ¿incluyen también al **conductor** (hasta 5) y al **tenedor**? ¿El remolque puede ser de otra empresa además de otra persona? ¿Hoy usan esta consulta combinada en TusDatos?
 9. **Permisos del usuario:** ¿qué más debe poder hacer o ver (p.ej. adjuntar documentos, cancelar una solicitud, ver un comentario del admin)?
 
 ---
