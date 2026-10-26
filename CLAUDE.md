@@ -53,6 +53,8 @@ decisión. El proyecto se trabaja desde varios computadores: esos documentos son
 - Rápido en PCs lentos y móvil: Server Components por defecto, sin Framer Motion ni glassmorphism,
   transiciones CSS cortas, gráficas con carga diferida, paginación en servidor. Mobile-first.
 - El semáforo de hallazgos siempre lleva icono + texto, nunca solo color.
+- Logo: `public/brand/elogia-logo.svg` (y `.png`), salvia `#95A495`; ícono en `app/icon.svg`. El salvia no sirve para texto/botones
+  sobre blanco: usar los tonos oscuros de la paleta §8.2 (`#517051` primario).
 
 ## Mapa del código
 - `lib/env.ts` — variables de servidor validadas con Zod (perezoso, no rompe el build).

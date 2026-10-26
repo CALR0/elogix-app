@@ -612,35 +612,50 @@ Es la persona de Elogia que hoy hace el flujo completo en TusDatos. Tiene acceso
 > genérico (no el look por defecto de shadcn/Tailwind) y nada infantil. Debe ir **rápido en PCs lentos
 > y en móvil**. Esto reemplaza la propuesta anterior (azul eléctrico, dark navy, glassmorphism).
 >
-> ⚠️ Los tokens de `app/globals.css` aún son los azules provisionales: hay que reemplazarlos por esta
-> paleta. **Pendiente:** pedir al usuario el logo y el manual de marca de Elogia (si existe) para
-> ajustar los tonos exactos.
+> ✅ Paleta aplicada en `app/globals.css` (tokens compatibles con shadcn + `--brand`, `--primary-hover`
+> y semáforo). Modo oscuro listo con la clase `.dark` en `<html>` (falta el selector en la UI).
+
+### 8.0 Logo de Elogia
+- Archivo: [`public/brand/elogia-logo.png`](../public/brand/elogia-logo.png) — 970×484, fondo transparente,
+  monocromo en **verde salvia `#95A495`** (color extraído del logo). Wordmark redondeado "elogia" con
+  una hoja, y "SOLUCIONES LOGÍSTICAS" debajo.
+- Úsalo con `next/image`. Sobre fondo oscuro se ve bien tal cual (contraste 8:1); sobre blanco es
+  suave (2,6:1): úsalo grande (login, encabezado), no en tamaños pequeños.
+- **SVG:** [`public/brand/elogia-logo.svg`](../public/brand/elogia-logo.svg) (~22 KB), vectorizado desde el PNG
+  con potrace. Es el que usa la app. Si Elogia consigue el SVG original, reemplazarlo.
+- **Ícono de pestaña:** `app/icon.svg`, la hoja del logo en blanco sobre salvia-700 `#436043`.
+- En fondos oscuros el logo se muestra en blanco con `brightness-0 invert` (ver login).
+- No hay manual de marca: la paleta se deriva del logo.
 
 ### 8.1 Concepto
-"Logística sostenible": sobria, confiable y precisa, como un tablero de control de flota. El verde
-transmite la identidad ecológica de Elogia; el gris asfalto/carbón da seriedad; el contexto de
+"Logística sostenible": sobria, confiable y precisa, como un tablero de control de flota. El
+**verde salvia** del logo es la identidad: un verde apagado y elegante, nada chillón. El contexto de
 transporte se sugiere con detalles (iconografía, líneas de ruta), nunca con ilustraciones caricaturescas.
 
-### 8.2 Paleta (propuesta inicial, ajustar con la marca de Elogia)
+### 8.2 Paleta "Salvia Elogia" (derivada del logo `#95A495`, tono 120°)
 
-**Modo claro (por defecto: oficina, sesiones largas, mejor legibilidad):**
+El salvia de la marca es claro: **no sirve para texto ni botones sobre blanco** (2,6:1, no pasa WCAG).
+Se usa como color de marca (logo, detalles, gráficas) y se derivan tonos más oscuros del mismo verde
+para lo interactivo. Contrastes verificados contra blanco:
 
-| Token | Uso | Color |
-|-------|-----|-------|
-| `--primary` | Botones principales, enlaces, estado activo | Verde bosque `#1F6F4A` |
-| `--primary-hover` | Hover / presionado | `#17573A` |
-| `--secondary` | Fondos suaves de selección, chips | Verde salvia `#E3EFE7` |
-| `--accent` | Detalles de marca, gráficas | Verde hoja `#3E9B66` |
-| `--foreground` | Texto principal | Carbón asfalto `#1C2622` |
-| `--muted-foreground` | Texto secundario | `#5B6B64` |
-| `--background` | Fondo de la app | Blanco con matiz verde `#F5F8F6` |
-| `--card` | Superficies (tarjetas, tablas) | `#FFFFFF` |
-| `--border` | Bordes y divisores | `#DCE5DF` |
+| Escala | Color | Contraste vs blanco | Uso |
+|--------|-------|---------------------|-----|
+| salvia-50 | `#F4F6F4` | — | `--background` (fondo de la app) |
+| salvia-100 | `#E2E9E2` | — | `--secondary` (selección, chips, hover de filas) |
+| salvia-200 | `#C7D1C7` | — | Bordes fuertes, separadores de sección |
+| salvia-400 | `#95A495` | 2,6:1 | **Color de marca**: logo, acentos decorativos, gráficas |
+| salvia-600 | `#517051` | 5,6:1 ✅ AA | `--primary` (botones con texto blanco, enlaces, activo) |
+| salvia-700 | `#436043` | 7,0:1 ✅ AAA | `--primary-hover` / presionado |
+| salvia-800 | `#364E36` | 9,1:1 | Encabezados de marca, sidebar |
+| salvia-900 | `#1E2620` | 15:1 | `--foreground` (texto principal, carbón verdoso) |
 
-**Modo oscuro (opcional):** fondo `#0E1613`, superficies `#15201B`, bordes `#24332C`,
-texto `#E4ECE7`, primario `#4CB782`.
+Complementos: `--card` `#FFFFFF`, `--border` `#DCE3DC`, `--muted-foreground` `#5B675C`.
 
-**Semáforo de hallazgos** (distinto del verde de marca para no confundir "marca" con "sin hallazgo"):
+**Modo claro por defecto** (oficina, sesiones largas). **Modo oscuro opcional:** fondo `#121712`,
+superficies `#1A231A`, bordes `#2A362A`, texto `#E2E9E2`, primario = salvia de marca `#95A495`
+con texto oscuro encima (8:1).
+
+**Semáforo de hallazgos** (más saturado que el salvia de marca, para no confundir "marca" con "sin hallazgo"):
 
 | Nivel | Color | Siempre acompañado de |
 |-------|-------|-----------------------|

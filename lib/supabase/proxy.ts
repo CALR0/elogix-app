@@ -16,6 +16,20 @@ const PUBLIC_PATHS = [
  * cerca de los datos (lib/auth.ts + RLS).
  */
 export async function updateSession(request: NextRequest) {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  ) {
+    // Sin .env.local: en desarrollo se deja ver la UI; en producción se falla cerrado.
+    if (process.env.NODE_ENV === "production") {
+      return new NextResponse("Supabase no está configurado", { status: 503 });
+    }
+    console.warn(
+      "[proxy] Falta configurar Supabase en .env.local; sin control de sesión.",
+    );
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

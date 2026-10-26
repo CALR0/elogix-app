@@ -25,6 +25,9 @@ cambio de modelo **Estudio → Consultas** (§14.3).
 | 2026-10-25 | Fase 2 (c) | Flujo de trabajo: todo en la nube (local → Supabase nube → Vercel), sin Docker. Git inicializado (`CALR0/elogix-app`). **App solo para Elogia:** eliminada la multi-organización y `is_platform_admin`; tabla `configuracion` global; 22 pruebas RLS |
 | 2026-10-25 | Fase 2 (d) | Preguntas enviadas a Keyner (§15; la 7 ya respondida: usuarios = coordinadores de Elogia). SDK: PDF asíncrono (HTTP 202) con `fetchReport`/`fetchReportWhenReady`. Documentado qué entrega TusDatos y la propuesta de copiar el PDF solo al decidir (§14.4) |
 | 2026-10-25 | Fase 2 (e) | Nueva dirección de diseño (contexto §8): corporativo, verde ecológico de Elogia, ambientado en transporte, sin Framer Motion ni glassmorphism, rendimiento para PCs lentos y móvil. Tokens de `globals.css` aún azules (pendiente) |
+| 2026-10-25 | Fase 2 (f) | Logo guardado en `public/brand/elogia-logo.png` (salvia `#95A495`). Paleta §8.2 rehecha desde el logo con contrastes WCAG verificados. Pendiente: logo en SVG y favicon |
+| 2026-10-25 | Fase 2 (g) | Paleta salvia aplicada en `globals.css` (claro + `.dark`, foco visible, reduced-motion). Inicio con logo, revisado en escritorio y móvil. `proxy.ts` deja ver la UI en desarrollo sin `.env.local` (en producción responde 503). `.claude/launch.json` para `npm run dev` |
+| 2026-10-25 | Fase 2 (h) | Logo vectorizado a SVG, ícono de pestaña (hoja), pantalla de login moderna (panel de marca en escritorio, formulario mobile-first, mostrar/ocultar contraseña). `/` redirige a `/login`. Al ingresar aún no pasa nada (falta Supabase) |
 
 ---
 
@@ -71,7 +74,7 @@ Incluye la revisión de arquitectura de Fase 1 (ver `ELOGIX_CONTEXT.md` §13).
 - [x] Design tokens (paleta ELOGIX + semáforo de hallazgos, nombres compatibles con shadcn), Inter, `lang="es"`
 - [x] Security headers en `next.config.ts`
 - [x] Inicializar git + primer commit (repo: github.com/CALR0/elogix-app)
-- [ ] Reemplazar los tokens azules provisionales de `app/globals.css` por la paleta verde de §8 (pedir logo/manual de marca de Elogia)
+- [x] Paleta "Salvia Elogia" (§8.2) aplicada en `app/globals.css` + logo en la página de inicio
 - [ ] Instalar shadcn/ui (`npx shadcn@latest init`) y personalizarlo con esos tokens
 - [ ] **(Tú)** Crear proyecto en Supabase y llenar `.env.local`
 - [x] Repo en GitHub creado y git listo (falta tu `git push`)
@@ -100,7 +103,8 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 - [ ] **Decisión sugerida** por reglas, si el experto define criterios *(§14 P6)*
 - [ ] Usuario ve el resultado final (Aprobado / Rechazado / En revisión), nunca hallazgos *(§14 P7)*
 - [ ] **Auth**
-  - [ ] Página de Login (email + password con Supabase Auth)
+  - [x] Pantalla de Login (diseño): panel de marca + formulario, responsive — `app/(auth)/login`
+  - [ ] Conectar el login a Supabase Auth (`iniciarSesion` en `actions.ts` hoy no hace nada)
   - [ ] proxy.ts (sesión) + `requireUser`/`requireAdmin` por ruta
   - [ ] Recuperación de contraseña
   - [ ] Redireccionamiento por rol al hacer login:
