@@ -115,6 +115,50 @@ r = await as(
 );
 check("usuario no puede crear a nombre de otro", err(r), r);
 
+// Vehículo con remolque (contexto §14.6)
+const insertPlaca = (extra = "", valores = "") =>
+  `insert into public.solicitudes (tipo_documento, placa, documento, tipo_doc_propietario, autorizacion_titular${extra})
+   values ('PLACA', 'SNT413', '71234556', 'CC', true${valores}) returning numero`;
+
+r = await as(
+  USUARIO,
+  insertPlaca(
+    ", placa_remolque, tipo_doc_propietario_remolque, documento_propietario_remolque",
+    ", 'R41130', 'NIT', '900345112'",
+  ),
+);
+check("vehículo con remolque de otro propietario se acepta", ok(r, 1), r);
+
+r = await as(USUARIO, insertPlaca(", placa_remolque", ", 'S12345'"));
+check("remolque del mismo propietario se acepta", ok(r, 1), r);
+
+r = await as(USUARIO, insertPlaca(", placa_remolque", ", 'ABC123'"));
+check("placa de remolque inválida se rechaza", err(r), r);
+
+r = await as(
+  USUARIO,
+  insertPlaca(
+    ", placa_remolque, tipo_doc_propietario_remolque",
+    ", 'R41130', 'CC'",
+  ),
+);
+check("propietario del remolque incompleto se rechaza", err(r), r);
+
+r = await as(
+  USUARIO,
+  `insert into public.solicitudes (tipo_documento, documento, placa_remolque, autorizacion_titular) values ('CC', '123', 'R41130', true)`,
+);
+check("remolque en consulta por documento se rechaza", err(r), r);
+
+r = await as(
+  USUARIO,
+  `insert into public.solicitudes (tipo_documento, documento, autorizacion_titular, simulada) values ('CC', '1', true, true)`,
+);
+check("usuario no puede marcar una solicitud como simulada", err(r), r);
+
+// Limpiar las de vehículo para no alterar los conteos de abajo
+await db.exec(`delete from public.solicitudes where tipo_documento = 'PLACA'`);
+
 // El sistema (sin RLS) registra los resultados
 await db.exec(`insert into public.solicitud_resultados (solicitud_id, hallazgo, hallazgo_nivel)
   select id, true, 'alto' from public.solicitudes`);
@@ -169,6 +213,37 @@ check(
   ok(r, 2) && r.rows[0].revisado_por === ADMIN,
   r,
 );
+
+// La decisión (no los hallazgos) llega a la solicitud del usuario
+r = await as(
+  USUARIO,
+  `select decision, decision_comentario from public.solicitudes`,
+);
+check(
+  "usuario ve la decisión de su solicitud",
+  ok(r, 1) && r.rows[0].decision === "aprobado",
+  r,
+);
+
+r = await as(
+  ADMIN,
+  `update public.solicitud_resultados set revision_estado = 'rechazado', revision_comentario = 'Documento ilegible'
+   where solicitud_id = (select id from public.solicitudes where documento = '123') returning solicitud_id`,
+);
+r = await as(
+  USUARIO,
+  `select decision, decision_comentario from public.solicitudes`,
+);
+check(
+  "usuario ve el rechazo y el comentario del admin",
+  ok(r, 1) &&
+    r.rows[0].decision === "rechazado" &&
+    r.rows[0].decision_comentario === "Documento ilegible",
+  r,
+);
+
+r = await as(USUARIO, `update public.solicitudes set decision = 'aprobado'`);
+check("usuario no puede cambiar la decisión", err(r) || ok(r, 0), r);
 
 r = await as(
   ADMIN,

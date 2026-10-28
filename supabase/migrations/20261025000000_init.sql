@@ -154,6 +154,11 @@ create table public.solicitudes (
   placa                 text,                      -- tipo PLACA
   tipo_doc_propietario  text check (tipo_doc_propietario in ('CC', 'CE', 'NIT', 'TI')),
 
+  -- Remolque opcional (contexto §14.6). Sin tipo/documento propio = mismo propietario del cabezote.
+  placa_remolque                  text check (placa_remolque ~ '^[RS][0-9]{5}$'),
+  tipo_doc_propietario_remolque   text check (tipo_doc_propietario_remolque in ('CC', 'CE', 'NIT', 'PP', 'PPT', 'INT')),
+  documento_propietario_remolque  text,
+
   -- Ley 1581 de 2012 (Habeas Data): evidencia de autorización del titular
   autorizacion_titular  boolean not null check (autorizacion_titular),
   autorizacion_soporte  text,                      -- ruta en Storage (opcional)
@@ -161,11 +166,20 @@ create table public.solicitudes (
   estado                public.solicitud_estado not null default 'enviada',
   tusdatos_jobid        text,
   tusdatos_report_id    text,
+  tusdatos_batch_id     text,                      -- consulta combinada (vehículo + remolque)
   intentos              int not null default 0,
+  -- true = la consulta se simuló (TUSDATOS_MODO=simulado): no gastó créditos ni salió a TusDatos
+  simulada              boolean not null default false,
 
   created_at            timestamptz not null default now(),
   updated_at            timestamptz not null default now(),
   finalizada_at         timestamptz,
+
+  constraint remolque_solo_en_vehiculo check (placa_remolque is null or tipo_documento = 'PLACA'),
+  constraint remolque_propietario_completo check (
+    (tipo_doc_propietario_remolque is null) = (documento_propietario_remolque is null)
+    and (placa_remolque is not null or tipo_doc_propietario_remolque is null)
+  ),
 
   constraint solicitud_campos_por_tipo check (
     case tipo_documento
@@ -279,7 +293,8 @@ grant update (full_name) on public.profiles to authenticated;
 grant update (requiere_confirmacion_envio, alerta_creditos_minimos) on public.configuracion to authenticated;
 
 grant insert (tipo_documento, documento, nombre, fecha_expedicion, placa,
-  tipo_doc_propietario, autorizacion_titular, autorizacion_soporte)
+  tipo_doc_propietario, placa_remolque, tipo_doc_propietario_remolque,
+  documento_propietario_remolque, autorizacion_titular, autorizacion_soporte)
   on public.solicitudes to authenticated;
 
 grant update (revision_estado, revision_comentario) on public.solicitud_resultados to authenticated;

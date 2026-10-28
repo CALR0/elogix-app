@@ -1,31 +1,36 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
 import logo from "@/public/brand/elogia-logo.svg";
 import { Suspense } from "react";
 import {
-  NavInferiorAdmin,
   NavInferiorAdminEstatico,
-  NavLateral,
   NavLateralEstatico,
 } from "@/components/admin/nav";
-import { ADMIN_DEMO, ESTUDIOS_DEMO } from "@/lib/estudios/mock";
+import {
+  NavInferiorConConteo,
+  NavLateralConConteo,
+} from "@/components/admin/nav-con-conteo";
+import {
+  ChipSesion,
+  ChipSesionCargando,
+} from "@/components/sesion/chip-sesion";
+import { RefrescoEnVivo } from "@/components/sesion/refresco-en-vivo";
+
+// Cambios que refrescan las pantallas del admin en vivo
+const TABLAS_ADMIN = ["solicitudes", "solicitud_resultados"] as const;
 
 /**
- * Layout del rol admin. MAQUETA con datos de ejemplo.
- * Pendiente (Fase 3): requireAdmin() y conteos reales.
+ * Layout del rol admin. <ChipSesion> (dentro de Suspense) exige rol admin:
+ * sin sesión redirige al login y un usuario normal ve la página 403.
  */
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const porRevisar = ESTUDIOS_DEMO.filter(
-    (e) => e.estado === "por_revisar",
-  ).length;
-
   return (
     <div className="flex min-h-dvh">
+      <RefrescoEnVivo tablas={TABLAS_ADMIN} />
       {/* Panel lateral (escritorio) */}
       <aside className="bg-brand-deep sticky top-0 hidden h-dvh w-64 shrink-0 flex-col px-4 py-6 text-white lg:flex">
         <Link href="/dashboard" className="mb-10 px-2">
@@ -39,26 +44,14 @@ export default function AdminLayout({
         <p className="mb-2 px-3 text-[11px] font-medium tracking-[0.2em] text-white/40 uppercase">
           Administración
         </p>
-        <Suspense fallback={<NavLateralEstatico porRevisar={porRevisar} />}>
-          <NavLateral porRevisar={porRevisar} />
+        <Suspense fallback={<NavLateralEstatico porRevisar={0} />}>
+          <NavLateralConConteo />
         </Suspense>
 
-        <div className="mt-auto flex items-center gap-3 rounded-xl bg-white/6 p-3">
-          <span className="bg-brand text-brand-deep flex size-9 items-center justify-center rounded-full text-xs font-semibold">
-            {ADMIN_DEMO.iniciales}
-          </span>
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-medium">{ADMIN_DEMO.nombre}</p>
-            <p className="text-xs text-white/50">Administrador</p>
-          </div>
-          <Link
-            href="/login"
-            aria-label="Cerrar sesión"
-            title="Cerrar sesión"
-            className="flex size-8 items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <LogOut className="size-4" aria-hidden />
-          </Link>
+        <div className="mt-auto">
+          <Suspense fallback={<ChipSesionCargando variante="admin-lateral" />}>
+            <ChipSesion variante="admin-lateral" />
+          </Suspense>
         </div>
       </aside>
 
@@ -71,9 +64,9 @@ export default function AdminLayout({
             priority
             className="h-auto w-20 brightness-0 invert"
           />
-          <span className="bg-brand text-brand-deep flex size-8 items-center justify-center rounded-full text-xs font-semibold">
-            {ADMIN_DEMO.iniciales}
-          </span>
+          <Suspense fallback={<ChipSesionCargando variante="admin-movil" />}>
+            <ChipSesion variante="admin-movil" />
+          </Suspense>
         </header>
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-12">
@@ -81,8 +74,8 @@ export default function AdminLayout({
         </main>
       </div>
 
-      <Suspense fallback={<NavInferiorAdminEstatico porRevisar={porRevisar} />}>
-        <NavInferiorAdmin porRevisar={porRevisar} />
+      <Suspense fallback={<NavInferiorAdminEstatico porRevisar={0} />}>
+        <NavInferiorConConteo />
       </Suspense>
     </div>
   );

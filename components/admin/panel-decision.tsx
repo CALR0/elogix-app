@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   CircleCheck,
   CircleX,
@@ -9,24 +10,30 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { EstadoEstudio } from "@/lib/estudios/mock";
+import {
+  decidirEstudio,
+  reintentarFuentesEstudio,
+} from "@/app/(admin)/estudios/acciones";
+import type { EstadoEstudio } from "@/lib/estudios/tipos";
 import { cx } from "@/lib/utils";
-
-const espera = () => new Promise((r) => setTimeout(r, 700));
 
 /**
  * Decisión del admin: aprobar o rechazar (rechazar pide confirmación y
- * comentario). MAQUETA: el cambio es local. En la Fase 3 actualiza
- * `solicitud_resultados.revision_estado` (el trigger registra quién y cuándo),
- * guarda el PDF en Storage y deja registro en `audit_logs`.
+ * comentario). Llama a `decidirEstudio`: actualiza `revision_estado` (el
+ * trigger registra quién y cuándo) y deja registro en la auditoría.
+ * Pendiente: guardar copia del PDF en Storage al decidir (contexto §14.4).
  */
 export function PanelDecision({
+  solicitudId,
   estadoInicial,
   comentarioInicial,
 }: {
+  solicitudId: string;
   estadoInicial: EstadoEstudio;
   comentarioInicial?: string;
 }) {
+  const router = useRouter();
+  const [error, setError] = useState("");
   const [estado, setEstado] = useState(estadoInicial);
   const [comentario, setComentario] = useState(comentarioInicial ?? "");
   const [confirmarRechazo, setConfirmarRechazo] = useState(false);
@@ -35,11 +42,18 @@ export function PanelDecision({
   const decidido = estado === "aprobado" || estado === "rechazado";
   const bloqueado = estado === "procesando" || estado === "error_envio";
 
-  function decidir(nuevo: "aprobado" | "rechazado") {
+  function decidir(nuevo: "aprobado" | "rechazado" | "pendiente") {
+    setError("");
     startTransition(async () => {
-      await espera();
-      setEstado(nuevo);
+      const r = await decidirEstudio(solicitudId, nuevo, comentario);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      setEstado(nuevo === "pendiente" ? "por_revisar" : nuevo);
+      if (nuevo === "pendiente") setComentario("");
       setConfirmarRechazo(false);
+      router.refresh(); // historial y contadores
     });
   }
 
@@ -71,12 +85,14 @@ export function PanelDecision({
           <p className="text-muted-foreground mt-2 text-sm">“{comentario}”</p>
         )}
         <button
-          onClick={() => setEstado("por_revisar")}
-          className="text-muted-foreground hover:text-foreground mt-4 inline-flex items-center gap-1.5 text-xs font-medium"
+          disabled={pendiente}
+          onClick={() => decidir("pendiente")}
+          className="text-muted-foreground hover:text-foreground mt-4 inline-flex items-center gap-1.5 text-xs font-medium disabled:opacity-60"
         >
           <Undo2 className="size-3.5" aria-hidden />
           Cambiar decisión
         </button>
+        {error && <p className="text-destructive mt-2 text-xs">{error}</p>}
       </div>
     );
   }
@@ -115,6 +131,16 @@ export function PanelDecision({
             placeholder="Motivo de la decisión…"
             className="border-input bg-card focus-visible:border-primary mt-1.5 w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none"
           />
+          <p className="text-muted-foreground mt-1 text-[11px]">
+            Quien hizo la solicitud verá la decisión y este comentario (no los
+            hallazgos).
+          </p>
+
+          {error && (
+            <p role="alert" className="text-destructive mt-3 text-xs">
+              {error}
+            </p>
+          )}
 
           {confirmarRechazo ? (
             <div className="border-destructive/30 bg-destructive/5 mt-4 rounded-xl border p-3">
@@ -171,15 +197,23 @@ export function PanelDecision({
 }
 
 /** Reintento manual de fuentes con error (gratis en TusDatos: `GET /api/retry/{id}`). */
-export function BotonReintentar({ reintentos }: { reintentos: number }) {
+export function BotonReintentar({
+  solicitudId,
+  reintentos,
+}: {
+  solicitudId: string;
+  reintentos: number;
+}) {
+  const router = useRouter();
   const [estado, setEstado] = useState<"idle" | "enviando" | "enviado">("idle");
   return (
     <button
       disabled={estado !== "idle"}
       onClick={async () => {
         setEstado("enviando");
-        await espera();
+        await reintentarFuentesEstudio(solicitudId);
         setEstado("enviado");
+        router.refresh();
       }}
       className="inline-flex h-9 items-center gap-2 rounded-lg border border-current/25 px-3 text-sm font-medium transition-colors hover:bg-current/5 disabled:opacity-70"
     >
@@ -190,7 +224,7 @@ export function BotonReintentar({ reintentos }: { reintentos: number }) {
       )}
       {estado === "enviado"
         ? "Reintento enviado"
-        : `Reintentar ahora${reintentos ? ` (${reintentos}/3 automáticos)` : ""}`}
+        : `Reintentar ahora${reintentos ? ` (${reintentos} hecho${reintentos === 1 ? "" : "s"})` : ""}`}
     </button>
   );
 }

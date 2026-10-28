@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { ListaSolicitudes } from "@/components/solicitudes/lista-solicitudes";
-import { SOLICITUDES_DEMO } from "@/lib/solicitudes/mock";
+import { requireUser } from "@/lib/auth";
+import { listarMisSolicitudes } from "@/lib/solicitudes/datos";
 
 export const metadata: Metadata = { title: "Mis solicitudes" };
 
-/** MAQUETA con datos de ejemplo. El usuario ve el estado, nunca resultados. */
-export default function HistorialPage() {
+/** El usuario ve el estado de sus solicitudes, nunca resultados. */
+export default function MisSolicitudesPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -17,7 +19,22 @@ export default function HistorialPage() {
           administrador.
         </p>
       </header>
-      <ListaSolicitudes solicitudes={SOLICITUDES_DEMO} />
+      <Suspense
+        fallback={
+          <div
+            className="bg-card h-96 animate-pulse rounded-2xl border"
+            aria-busy="true"
+            aria-label="Cargando solicitudes"
+          />
+        }
+      >
+        <Lista />
+      </Suspense>
     </div>
   );
+}
+
+async function Lista() {
+  const yo = await requireUser();
+  return <ListaSolicitudes solicitudes={await listarMisSolicitudes(yo.id)} />;
 }

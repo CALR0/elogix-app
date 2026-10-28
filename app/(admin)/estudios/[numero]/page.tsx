@@ -23,7 +23,9 @@ import {
   PanelDecision,
 } from "@/components/admin/panel-decision";
 import { Suspense } from "react";
-import { buscarEstudio, type ResultadoFuente } from "@/lib/estudios/mock";
+import { requireAdmin } from "@/lib/auth";
+import { obtenerEstudio } from "@/lib/estudios/datos";
+import type { ResultadoFuente } from "@/lib/estudios/tipos";
 import { cx, referencia, fechaCorta } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Revisar estudio" };
@@ -42,7 +44,8 @@ const FUENTE: Record<
 };
 
 /**
- * Revisor de un estudio. MAQUETA con datos de ejemplo.
+ * Revisor de un estudio con datos reales (`obtenerEstudio`). Botones de reporte/PDF:
+ * pendientes de la API real (contexto §16.3, paso 8).
  * El número se lee dentro de <Suspense> (Cache Components + Partial
  * Prefetching): el marco de la página se prerenderiza y el estudio llega en streaming.
  */
@@ -84,8 +87,9 @@ function RevisorCargando() {
 async function Revisor({
   params,
 }: Pick<PageProps<"/estudios/[numero]">, "params">) {
+  await requireAdmin();
   const { numero } = await params;
-  const estudio = buscarEstudio(Number(numero));
+  const estudio = await obtenerEstudio(Number(numero));
   if (!estudio) notFound();
 
   const Icon = estudio.modulo === "vehiculo" ? CarFront : IdCard;
@@ -102,8 +106,13 @@ async function Revisor({
             <Icon className="size-6" aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="text-muted-foreground font-mono text-xs">
+            <p className="text-muted-foreground flex items-center gap-2 font-mono text-xs">
               {referencia(estudio.numero)}
+              {estudio.simulada && (
+                <span className="bg-secondary rounded px-1.5 py-0.5 font-sans text-[10px] font-medium">
+                  Consulta simulada · no salió a TusDatos
+                </span>
+              )}
             </p>
             <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
               {estudio.descripcion}
@@ -143,7 +152,10 @@ async function Revisor({
                   </p>
                 </div>
               </div>
-              <BotonReintentar reintentos={estudio.reintentos} />
+              <BotonReintentar
+                solicitudId={estudio.id}
+                reintentos={estudio.reintentos}
+              />
             </section>
           )}
 
@@ -239,6 +251,8 @@ async function Revisor({
         {/* Columna lateral */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <PanelDecision
+            key={estudio.estado}
+            solicitudId={estudio.id}
             estadoInicial={estudio.estado}
             comentarioInicial={estudio.comentario}
           />

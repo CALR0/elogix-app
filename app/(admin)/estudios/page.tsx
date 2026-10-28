@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { BandejaEstudios } from "@/components/admin/bandeja-estudios";
-import { ESTUDIOS_DEMO } from "@/lib/estudios/mock";
+import { requireAdmin } from "@/lib/auth";
+import { listarEstudios } from "@/lib/estudios/datos";
 
 export const metadata: Metadata = { title: "Estudios" };
 
-/** Bandeja de estudios del admin. MAQUETA con datos de ejemplo. */
+/** Bandeja de estudios del admin con datos reales. */
 export default function EstudiosPage() {
   return (
     <div className="space-y-6">
@@ -16,7 +18,22 @@ export default function EstudiosPage() {
           Ordenados por riesgo: lo más grave primero.
         </p>
       </header>
-      <BandejaEstudios estudios={ESTUDIOS_DEMO} />
+      <Suspense
+        fallback={
+          <div
+            className="bg-card h-96 animate-pulse rounded-2xl border"
+            aria-busy="true"
+            aria-label="Cargando estudios"
+          />
+        }
+      >
+        <Bandeja />
+      </Suspense>
     </div>
   );
+}
+
+async function Bandeja() {
+  await requireAdmin();
+  return <BandejaEstudios estudios={await listarEstudios()} />;
 }

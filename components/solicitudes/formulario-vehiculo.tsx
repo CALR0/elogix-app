@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { CircleAlert, Container, LoaderCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,11 +9,12 @@ import {
   Input,
   OpcionesPastilla,
 } from "@/components/ui/field";
+import { crearConsultaVehiculo } from "@/app/(usuario)/solicitudes/acciones";
 import {
   EnvioError,
   EnvioExitoso,
-  simularEnvio,
 } from "@/components/solicitudes/resultado-envio";
+import { useEnvioSolicitud } from "@/components/solicitudes/use-envio";
 import {
   TIPOS_DOC_PROPIETARIO,
   TIPOS_DOC_REMOLQUE,
@@ -23,11 +24,6 @@ import {
   type TipoDocRemolque,
 } from "@/lib/solicitudes/schemas";
 import { cx, referencia } from "@/lib/utils";
-
-type Envio =
-  | { estado: "formulario" }
-  | { estado: "exito"; numero: number }
-  | { estado: "error"; mensaje: string };
 
 const VACIO = {
   placa: "",
@@ -115,8 +111,13 @@ function PlacaInput({
 export function FormularioVehiculo() {
   const [datos, setDatos] = useState(VACIO);
   const [errores, setErrores] = useState<Record<string, string>>({});
-  const [envio, setEnvio] = useState<Envio>({ estado: "formulario" });
-  const [enviando, startTransition] = useTransition();
+  const {
+    envio,
+    enviando,
+    enviar: enviarAccion,
+    reintentar,
+    reiniciar,
+  } = useEnvioSolicitud();
 
   function set<K extends keyof typeof VACIO>(
     campo: K,
@@ -133,14 +134,7 @@ export function FormularioVehiculo() {
       setErrores(erroresPorCampo(parsed.error));
       return;
     }
-    startTransition(async () => {
-      const r = await simularEnvio(datos.documentoPropietario);
-      setEnvio(
-        r.ok
-          ? { estado: "exito", numero: r.numero }
-          : { estado: "error", mensaje: r.mensaje },
-      );
-    });
+    enviarAccion(() => crearConsultaVehiculo(datos), setErrores);
   }
 
   if (envio.estado === "exito") {
@@ -149,7 +143,7 @@ export function FormularioVehiculo() {
         referencia={referencia(envio.numero)}
         onNueva={() => {
           setDatos(VACIO);
-          setEnvio({ estado: "formulario" });
+          reiniciar();
         }}
       />
     );
@@ -158,7 +152,8 @@ export function FormularioVehiculo() {
     return (
       <EnvioError
         mensaje={envio.mensaje}
-        onReintentar={() => setEnvio({ estado: "formulario" })}
+        onReintentar={reintentar}
+        pendiente={enviando}
       />
     );
   }

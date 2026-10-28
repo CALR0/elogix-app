@@ -7,7 +7,7 @@ import { cx } from "@/lib/utils";
 export const POR_PAGINA = 5;
 
 /**
- * Paginación en el cliente para las MAQUETAS. Con Supabase la página se pide
+ * Paginación en el cliente (volúmenes bajos). Si una lista crece, la página se pide
  * al servidor (`.range(desde, hasta)` + `count: "exact"`) y el número de
  * página viaja en la URL (?pagina=2); el componente <Paginacion> se reutiliza.
  */

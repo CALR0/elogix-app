@@ -42,9 +42,11 @@ export function EnvioExitoso({
 export function EnvioError({
   mensaje,
   onReintentar,
+  pendiente,
 }: {
   mensaje: string;
   onReintentar: () => void;
+  pendiente?: boolean;
 }) {
   return (
     <div className="bg-card rounded-2xl border px-6 py-10 text-center sm:px-10">
@@ -56,9 +58,12 @@ export function EnvioError({
         {mensaje}
       </p>
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-        <Button tamano="lg" onClick={onReintentar}>
-          <RotateCcw className="size-4" aria-hidden />
-          Intentar de nuevo
+        <Button tamano="lg" onClick={onReintentar} disabled={pendiente}>
+          <RotateCcw
+            className={pendiente ? "size-4 animate-spin" : "size-4"}
+            aria-hidden
+          />
+          {pendiente ? "Reintentando…" : "Intentar de nuevo"}
         </Button>
         <Link
           href="/inicio"
@@ -69,20 +74,4 @@ export function EnvioError({
       </div>
     </div>
   );
-}
-
-/**
- * MAQUETA: simula el envío. Si el documento termina en "000" responde con
- * error, para poder ver ese estado. Se reemplaza por la Server Function real.
- */
-export async function simularEnvio(clave: string) {
-  await new Promise((r) => setTimeout(r, 900));
-  if (clave.endsWith("000")) {
-    return {
-      ok: false as const,
-      mensaje:
-        "El servicio de consultas no respondió a tiempo. Tus datos se conservaron; intenta de nuevo en unos segundos.",
-    };
-  }
-  return { ok: true as const, numero: 149 };
 }

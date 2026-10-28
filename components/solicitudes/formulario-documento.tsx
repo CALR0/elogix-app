@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { LoaderCircle, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,11 +9,12 @@ import {
   Input,
   OpcionesPastilla,
 } from "@/components/ui/field";
+import { crearConsultaDocumento } from "@/app/(usuario)/solicitudes/acciones";
 import {
   EnvioError,
   EnvioExitoso,
-  simularEnvio,
 } from "@/components/solicitudes/resultado-envio";
+import { useEnvioSolicitud } from "@/components/solicitudes/use-envio";
 import {
   TIPOS_DOCUMENTO,
   consultaDocumentoSchema,
@@ -21,11 +22,6 @@ import {
   type TipoDocumento,
 } from "@/lib/solicitudes/schemas";
 import { referencia } from "@/lib/utils";
-
-type Envio =
-  | { estado: "formulario" }
-  | { estado: "exito"; numero: number }
-  | { estado: "error"; mensaje: string };
 
 const VACIO = {
   tipo: "CC" as TipoDocumento,
@@ -38,8 +34,13 @@ const VACIO = {
 export function FormularioDocumento() {
   const [datos, setDatos] = useState(VACIO);
   const [errores, setErrores] = useState<Record<string, string>>({});
-  const [envio, setEnvio] = useState<Envio>({ estado: "formulario" });
-  const [enviando, startTransition] = useTransition();
+  const {
+    envio,
+    enviando,
+    enviar: enviarAccion,
+    reintentar,
+    reiniciar,
+  } = useEnvioSolicitud();
 
   const pideFecha = datos.tipo === "CE" || datos.tipo === "PPT";
   const pideNombre = datos.tipo === "PP";
@@ -59,14 +60,7 @@ export function FormularioDocumento() {
       setErrores(erroresPorCampo(parsed.error));
       return;
     }
-    startTransition(async () => {
-      const r = await simularEnvio(datos.documento);
-      setEnvio(
-        r.ok
-          ? { estado: "exito", numero: r.numero }
-          : { estado: "error", mensaje: r.mensaje },
-      );
-    });
+    enviarAccion(() => crearConsultaDocumento(datos), setErrores);
   }
 
   if (envio.estado === "exito") {
@@ -75,7 +69,7 @@ export function FormularioDocumento() {
         referencia={referencia(envio.numero)}
         onNueva={() => {
           setDatos(VACIO);
-          setEnvio({ estado: "formulario" });
+          reiniciar();
         }}
       />
     );
@@ -84,7 +78,8 @@ export function FormularioDocumento() {
     return (
       <EnvioError
         mensaje={envio.mensaje}
-        onReintentar={() => setEnvio({ estado: "formulario" })}
+        onReintentar={reintentar}
+        pendiente={enviando}
       />
     );
   }

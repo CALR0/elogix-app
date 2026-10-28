@@ -16,40 +16,95 @@ import {
   NivelBadge,
   nivelInfo,
 } from "@/components/admin/badges";
+import { Suspense } from "react";
+import { requireAdmin } from "@/lib/auth";
+import { listarEstudios } from "@/lib/estudios/datos";
 import {
-  ACTIVIDAD_DEMO,
-  ADMIN_DEMO,
-  CREDITOS_DEMO,
-  ESTUDIOS_DEMO,
-  FUENTES_ESTADO_DEMO,
   PESO_NIVEL,
-} from "@/lib/estudios/mock";
+  type Estudio,
+  type NivelHallazgo,
+} from "@/lib/estudios/tipos";
 import { cx, referencia, fechaCorta } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Panel" };
 
-/** Hallazgos del mes (ejemplo). */
-const HALLAZGOS_MES = {
-  alto: 7,
-  medio: 15,
-  bajo: 22,
-  info: 31,
-  sin_hallazgo: 96,
-};
+const HORA_MS = 3_600_000;
+const DIA_MS = 24 * HORA_MS;
+/** Día (número) en hora de Colombia, UTC−5. */
+const diaBogota = (ms: number) => Math.floor((ms - 5 * HORA_MS) / DIA_MS);
 
-/** Panel del admin. MAQUETA: gráficas en CSS puro (sin librerías) para que cargue rápido. */
+/** Panel del admin con datos reales. Gráficas en CSS puro (sin librerías) para que cargue rápido. */
 export default function DashboardPage() {
-  const porRevisar = ESTUDIOS_DEMO.filter((e) => e.estado === "por_revisar");
+  return (
+    <Suspense fallback={<PanelCargando />}>
+      <Contenido />
+    </Suspense>
+  );
+}
+
+function PanelCargando() {
+  return (
+    <div className="space-y-8" aria-busy="true" aria-label="Cargando panel">
+      <div className="bg-secondary h-12 w-48 animate-pulse rounded-lg" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className="bg-card h-32 animate-pulse rounded-2xl border"
+          />
+        ))}
+      </div>
+      <div className="bg-card h-96 animate-pulse rounded-2xl border" />
+    </div>
+  );
+}
+
+/**
+ * Consultas por día (últimos 14) y hallazgos del mes en curso, en hora de
+ * Colombia. Fuera del componente: lee la hora actual (Date.now).
+ */
+function resumenTemporal(estudios: Estudio[]) {
+  const ahora = Date.now();
+  const hoy = diaBogota(ahora);
+  const actividad = Array.from(
+    { length: 14 },
+    (_, i) =>
+      estudios.filter(
+        (e) => diaBogota(new Date(e.fecha).getTime()) === hoy - 13 + i,
+      ).length,
+  );
+  const local = new Date(ahora - 5 * HORA_MS);
+  const inicioMes =
+    Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) + 5 * HORA_MS;
+  const hallazgosMes: Record<NivelHallazgo, number> = {
+    alto: 0,
+    medio: 0,
+    bajo: 0,
+    info: 0,
+    sin_hallazgo: 0,
+  };
+  for (const e of estudios) {
+    if (e.nivel && new Date(e.fecha).getTime() >= inicioMes)
+      hallazgosMes[e.nivel]++;
+  }
+  return { actividad, hallazgosMes };
+}
+
+async function Contenido() {
+  const yo = await requireAdmin();
+  const estudios: Estudio[] = await listarEstudios();
+  const nombre = (yo.fullName || yo.email).split(/[s@]/)[0];
+
+  const porRevisar = estudios.filter((e) => e.estado === "por_revisar");
   const altos = porRevisar.filter((e) => e.nivel === "alto").length;
-  const enProceso = ESTUDIOS_DEMO.filter(
-    (e) => e.estado === "procesando",
-  ).length;
-  const conError = ESTUDIOS_DEMO.filter(
+  const enProceso = estudios.filter((e) => e.estado === "procesando").length;
+  const conError = estudios.filter(
     (e) => e.estado === "fuentes_error" || e.estado === "error_envio",
   ).length;
-  const atencion = ESTUDIOS_DEMO.filter((e) =>
-    ["por_revisar", "fuentes_error", "error_envio"].includes(e.estado),
-  )
+  const atencion = estudios
+    .filter((e) =>
+      ["por_revisar", "fuentes_error", "error_envio"].includes(e.estado),
+    )
     .sort(
       (a, b) =>
         (a.estado === "por_revisar" ? 0 : 1) -
@@ -59,19 +114,15 @@ export default function DashboardPage() {
     )
     .slice(0, 5);
 
-  const pctCreditos = Math.round(
-    (CREDITOS_DEMO.disponibles / CREDITOS_DEMO.comprados) * 100,
-  );
-  const maxActividad = Math.max(...ACTIVIDAD_DEMO);
-  const totalMes = Object.values(HALLAZGOS_MES).reduce((a, b) => a + b, 0);
+  const { actividad, hallazgosMes } = resumenTemporal(estudios);
+  const maxActividad = Math.max(1, ...actividad);
+  const totalMes = Object.values(hallazgosMes).reduce((a, b) => a + b, 0);
 
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-muted-foreground text-sm">
-            Buen día, {ADMIN_DEMO.nombre}
-          </p>
+          <p className="text-muted-foreground text-sm">Buen día, {nombre}</p>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             Panel
           </h1>
@@ -111,19 +162,10 @@ export default function DashboardPage() {
             <Wallet className="size-4" aria-hidden />
             Créditos TusDatos
           </div>
-          <p className="mt-3 text-2xl font-semibold tabular-nums sm:text-3xl">
-            {CREDITOS_DEMO.disponibles}
-            <span className="text-muted-foreground text-sm font-normal">
-              {" "}
-              / {CREDITOS_DEMO.comprados}
-            </span>
+          <p className="mt-3 text-2xl font-semibold sm:text-3xl">Simulado</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Sin API key: las consultas no gastan créditos.
           </p>
-          <div className="bg-secondary mt-3 h-1.5 overflow-hidden rounded-full">
-            <div
-              className="bg-primary h-full rounded-full"
-              style={{ width: `${pctCreditos}%` }}
-            />
-          </div>
         </div>
       </section>
 
@@ -139,6 +181,11 @@ export default function DashboardPage() {
               Ver bandeja
             </Link>
           </div>
+          {atencion.length === 0 && (
+            <p className="text-muted-foreground px-5 py-12 text-center text-sm">
+              Nada pendiente. Los estudios nuevos aparecerán aquí.
+            </p>
+          )}
           <ul className="divide-y">
             {atencion.map((e) => {
               const Icon = e.modulo === "vehiculo" ? CarFront : IdCard;
@@ -186,7 +233,7 @@ export default function DashboardPage() {
           </p>
           <ul className="mt-4 flex flex-1 flex-col justify-around gap-3">
             {NIVELES_ORDEN.map((n) => {
-              const valor = HALLAZGOS_MES[n];
+              const valor = hallazgosMes[n];
               return (
                 <li
                   key={n}
@@ -220,7 +267,7 @@ export default function DashboardPage() {
           <div className="flex items-baseline justify-between">
             <h2 className="font-semibold">Consultas · 14 días</h2>
             <span className="text-muted-foreground text-xs tabular-nums">
-              {ACTIVIDAD_DEMO.reduce((a, b) => a + b, 0)} en total
+              {actividad.reduce((a, b) => a + b, 0)} en total
             </span>
           </div>
           <div
@@ -228,15 +275,13 @@ export default function DashboardPage() {
             role="img"
             aria-label="Consultas por día en los últimos 14 días"
           >
-            {ACTIVIDAD_DEMO.map((v, i) => (
+            {actividad.map((v, i) => (
               <span
                 key={i}
                 title={`${v} consultas`}
                 className={cx(
                   "flex-1 rounded-t-[3px]",
-                  i === ACTIVIDAD_DEMO.length - 1
-                    ? "bg-primary"
-                    : "bg-brand/55",
+                  i === actividad.length - 1 ? "bg-primary" : "bg-brand/55",
                 )}
                 style={{ height: `${(v / maxActividad) * 100}%` }}
               />
@@ -250,17 +295,17 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
             {[
               {
-                v: FUENTES_ESTADO_DEMO.operativas,
+                v: "—",
                 l: "Operativas",
                 c: "text-primary",
               },
               {
-                v: FUENTES_ESTADO_DEMO.mantenimiento,
+                v: "—",
                 l: "Mantenimiento",
                 c: "text-[#9a5512]",
               },
               {
-                v: FUENTES_ESTADO_DEMO.caidas,
+                v: "—",
                 l: "Caídas",
                 c: "text-destructive",
               },
@@ -275,7 +320,7 @@ export default function DashboardPage() {
           </div>
           <p className="text-muted-foreground mt-auto flex items-center gap-1.5 pt-3 text-xs">
             <CircleCheck className="size-3.5" aria-hidden />
-            Las fuentes caídas pueden causar errores en las consultas.
+            Modo simulado: con la API se mostrará el estado real de cada fuente.
           </p>
         </section>
       </div>

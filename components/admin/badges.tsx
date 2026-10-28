@@ -9,7 +9,7 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
-import type { EstadoEstudio, NivelHallazgo } from "@/lib/estudios/mock";
+import type { EstadoEstudio, NivelHallazgo } from "@/lib/estudios/tipos";
 import { cx } from "@/lib/utils";
 
 const NIVEL: Record<

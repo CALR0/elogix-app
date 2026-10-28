@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { CarFront, CheckCheck, IdCard, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { aprobarEnLote } from "@/app/(admin)/estudios/acciones";
+import {
+  CarFront,
+  CheckCheck,
+  FlaskConical,
+  IdCard,
+  LoaderCircle,
+  Search,
+} from "lucide-react";
 import { EstadoEstudioTexto, NivelBadge } from "@/components/admin/badges";
 import { Paginacion, usePaginacion } from "@/components/ui/paginacion";
 import { inputClasses } from "@/components/ui/field";
@@ -10,7 +19,7 @@ import {
   PESO_NIVEL,
   type Estudio,
   type EstadoEstudio,
-} from "@/lib/estudios/mock";
+} from "@/lib/estudios/tipos";
 import { cx, referencia, fechaCorta } from "@/lib/utils";
 
 const PESTANAS: Array<{
@@ -44,17 +53,31 @@ function IconoModulo({ modulo }: { modulo: Estudio["modulo"] }) {
 
 /**
  * Bandeja del admin: ordenada por riesgo (alto primero) y con aprobación en
- * lote de los "sin hallazgo" (contexto §14 P4). MAQUETA: los cambios son locales.
+ * lote de los "sin hallazgo" (contexto §14 P4). Datos del servidor, refrescados en vivo.
  */
 export function BandejaEstudios({
   estudios: iniciales,
 }: {
   estudios: Estudio[];
 }) {
-  const [estudios, setEstudios] = useState(iniciales);
+  // Los datos llegan del servidor (y se refrescan en vivo). Solo se guarda
+  // localmente lo recién aprobado en lote, hasta que llegue el refresco.
+  const [aprobadosLocal, setAprobadosLocal] = useState<Set<number>>(new Set());
+  const estudios = useMemo(
+    () =>
+      iniciales.map((e) =>
+        aprobadosLocal.has(e.numero) && e.estado === "por_revisar"
+          ? { ...e, estado: "aprobado" as const }
+          : e,
+      ),
+    [iniciales, aprobadosLocal],
+  );
   const [pestana, setPestana] = useState("revisar");
   const [q, setQ] = useState("");
   const [seleccion, setSeleccion] = useState<Set<number>>(new Set());
+  const [aviso, setAviso] = useState("");
+  const [pendiente, startTransition] = useTransition();
+  const router = useRouter();
 
   const conteo = (estados: EstadoEstudio[] | null) =>
     estados
@@ -104,12 +127,18 @@ export function BandejaEstudios({
   }
 
   function aprobarSeleccion() {
-    setEstudios((lista) =>
-      lista.map((e) =>
-        seleccion.has(e.numero) ? { ...e, estado: "aprobado" } : e,
-      ),
-    );
-    setSeleccion(new Set());
+    const ids = estudios
+      .filter((e) => seleccion.has(e.numero))
+      .map((e) => e.id);
+    startTransition(async () => {
+      const r = await aprobarEnLote(ids);
+      setAviso(r.ok ? r.mensaje : r.error);
+      if (r.ok) {
+        setAprobadosLocal((s) => new Set([...s, ...seleccion]));
+        setSeleccion(new Set());
+        router.refresh(); // contadores del menú y del panel
+      }
+    });
   }
 
   return (
@@ -167,6 +196,15 @@ export function BandejaEstudios({
         </div>
       </div>
 
+      {aviso && (
+        <p
+          role="status"
+          className="bg-primary/8 border-primary/25 text-accent-foreground rounded-xl border px-4 py-2.5 text-sm"
+        >
+          {aviso}
+        </p>
+      )}
+
       {/* Aprobación en lote */}
       {pestana === "revisar" && seleccionables.length > 0 && (
         <div className="bg-secondary/60 flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -185,10 +223,14 @@ export function BandejaEstudios({
             </button>
             <button
               onClick={aprobarSeleccion}
-              disabled={seleccion.size === 0}
+              disabled={seleccion.size === 0 || pendiente}
               className="bg-primary text-primary-foreground hover:bg-primary-hover inline-flex h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors disabled:opacity-50"
             >
-              <CheckCheck className="size-4" aria-hidden />
+              {pendiente ? (
+                <LoaderCircle className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <CheckCheck className="size-4" aria-hidden />
+              )}
               Aprobar ({seleccion.size})
             </button>
           </div>
@@ -244,8 +286,20 @@ export function BandejaEstudios({
                         >
                           <IconoModulo modulo={e.modulo} />
                           <span className="min-w-0">
-                            <span className="block font-medium group-hover:underline">
+                            <span className="flex items-center gap-2 font-medium group-hover:underline">
                               {e.descripcion}
+                              {e.simulada && (
+                                <span
+                                  title="Consulta simulada: no salió a TusDatos"
+                                  className="bg-secondary text-muted-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium no-underline"
+                                >
+                                  <FlaskConical
+                                    className="size-3"
+                                    aria-hidden
+                                  />
+                                  Simulada
+                                </span>
+                              )}
                             </span>
                             <span className="text-muted-foreground block truncate text-xs">
                               {e.nombreConsultado} · {referencia(e.numero)}
