@@ -14,7 +14,10 @@ import {
 } from "lucide-react";
 import { inputClasses } from "@/components/ui/field";
 import { Paginacion, usePaginacion } from "@/components/ui/paginacion";
-import type { CategoriaAuditoria, EventoAuditoria } from "@/lib/auditoria/mock";
+import type {
+  CategoriaAuditoria,
+  EventoAuditoria,
+} from "@/lib/auditoria/tipos";
 import { cx, fechaHora } from "@/lib/utils";
 
 const POR_PAGINA = 10;
@@ -71,9 +74,9 @@ function exportarCsv(eventos: EventoAuditoria[]) {
 }
 
 /**
- * Registro de auditoría. MAQUETA: filtra y pagina en el cliente. En la Fase 3
- * los filtros y la página van en la URL y la consulta a `audit_logs` se pagina
- * en el servidor (índice por fecha).
+ * Registro de auditoría con los eventos reales (lib/auditoria/datos.ts).
+ * Filtra y pagina en el cliente sobre los más recientes. Si el volumen crece,
+ * pasar filtros y página a la URL y paginar `audit_logs` en el servidor.
  */
 export function VisorAuditoria({ eventos }: { eventos: EventoAuditoria[] }) {
   const [categoria, setCategoria] = useState<CategoriaAuditoria | "todas">(
