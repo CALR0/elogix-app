@@ -1,5 +1,5 @@
-import { LogOut } from "lucide-react";
 import { cerrarSesion } from "@/app/(auth)/login/actions";
+import { BotonCerrarSesion } from "@/components/sesion/boton-cerrar-sesion";
 import { requireAdmin, requireUser, type CurrentUser } from "@/lib/auth";
 import { cx } from "@/lib/utils";
 
@@ -43,19 +43,14 @@ export async function ChipSesion({ variante }: { variante: Variante }) {
 
   const salir = (
     <form action={cerrarSesion}>
-      <button
-        type="submit"
-        aria-label="Cerrar sesión"
-        title="Cerrar sesión"
+      <BotonCerrarSesion
         className={cx(
-          "flex items-center justify-center rounded-lg transition-colors",
+          "flex items-center justify-center rounded-lg transition-colors disabled:opacity-60",
           variante === "usuario"
             ? "text-muted-foreground hover:bg-secondary hover:text-foreground size-9"
             : "size-8 text-white/60 hover:bg-white/10 hover:text-white",
         )}
-      >
-        <LogOut className="size-4" aria-hidden />
-      </button>
+      />
     </form>
   );
 

@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Eye, EyeOff, LoaderCircle, LockKeyhole, Mail } from "lucide-react";
+import { PantallaCarga } from "@/components/ui/pantalla-carga";
 import { iniciarSesion } from "./actions";
 
 export function LoginForm() {
@@ -13,6 +14,8 @@ export function LoginForm() {
 
   return (
     <form action={formAction} className="space-y-5">
+      {/* Mientras se valida y se carga la pantalla de inicio */}
+      {pending && <PantallaCarga texto="Iniciando sesión…" />}
       <div className="space-y-1.5">
         <label htmlFor="email" className="text-sm font-medium">
           Correo electrónico
@@ -85,7 +88,7 @@ export function LoginForm() {
         {pending && (
           <LoaderCircle className="size-4 animate-spin" aria-hidden />
         )}
-        {pending ? "Ingresando…" : "Ingresar"}
+        {pending ? "Iniciando sesión…" : "Ingresar"}
       </button>
     </form>
   );
