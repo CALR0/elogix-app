@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { forbidden, redirect } from "next/navigation";
+import { connection } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export type AppRole = "usuario" | "admin";
@@ -17,6 +18,10 @@ export interface CurrentUser {
  * el perfil activo. Devuelve null si no hay sesión o el usuario está inactivo.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
+  // Supabase compara la vigencia del token con Date.now(). Con Cache Components
+  // la hora no se puede leer al prerenderizar: connection() hace que esto corra
+  // solo cuando llega la petición del usuario.
+  await connection();
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   const userId = claimsData?.claims?.sub;
@@ -53,6 +58,6 @@ export async function requireAdmin(): Promise<CurrentUser> {
 }
 
 /** Ruta de inicio según el rol. */
-export function homePathFor(user: CurrentUser) {
+export function homePathFor(user: Pick<CurrentUser, "role">) {
   return user.role === "admin" ? "/dashboard" : "/inicio";
 }

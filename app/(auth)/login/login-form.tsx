@@ -7,6 +7,9 @@ import { iniciarSesion } from "./actions";
 export function LoginForm() {
   const [state, formAction, pending] = useActionState(iniciarSesion, null);
   const [verClave, setVerClave] = useState(false);
+  // Controlado: React limpia el formulario tras cada envío y así el correo no
+  // se pierde si la contraseña fue incorrecta (la contraseña sí se borra).
+  const [email, setEmail] = useState("");
 
   return (
     <form action={formAction} className="space-y-5">
@@ -23,6 +26,8 @@ export function LoginForm() {
             id="email"
             name="email"
             type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="username"
             placeholder="nombre@elogia.com"
