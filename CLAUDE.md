@@ -9,6 +9,7 @@ responde, comenta el código y escribe la documentación en español.
 
 ## Lee primero
 1. `docs/ELOGIX_ROADMAP.md` → "Estado Actual": dónde vamos, siguiente paso y bitácora de sesiones.
+   **Para conectar la API real de TusDatos: `docs/ELOGIX_CONTEXT.md` §16** (qué validar y qué cambiar, archivo por archivo).
 2. `docs/ELOGIX_CONTEXT.md` §14 (objetivo de negocio), §15 (preguntas abiertas con el experto de
    TusDatos), §13 (qué se corrigió del diseño original), §3 (BD y RLS).
 3. `docs/openapi.json` es la spec oficial de TusDatos: verifica ahí cualquier endpoint o esquema
@@ -34,9 +35,12 @@ decisión. El proyecto se trabaja desde varios computadores: esos documentos son
 - Las pruebas se hacen con datos reales: cada consulta a TusDatos **gasta créditos**. Avisa antes
   de cualquier acción que lance consultas.
 - El usuario crea el repo en GitHub y hace el push él mismo.
+- **Modo simulado** (`TUSDATOS_MODO=simulado`, por defecto; contexto §14.7): BD y flujo reales, pero las
+  consultas no salen a TusDatos. Las solicitudes quedan con `simulada = true`. Aún no hay API key.
 
 ## Reglas que no se negocian
-- El rol `usuario` **nunca** ve hallazgos ni reportes. Se garantiza en la BD: los resultados viven
+- El rol `usuario` **nunca** ve hallazgos ni reportes (sí ve la decisión aprobada/rechazada y el comentario del admin,
+  copiados a `solicitudes` por un trigger). Se garantiza en la BD: los resultados viven
   en una tabla con RLS solo-admin. RLS filtra filas, no columnas: nunca pongas datos de resultado en
   una tabla que el usuario pueda leer.
 - Credenciales de TusDatos y `SUPABASE_SECRET_KEY` solo en servidor (`import "server-only"`).
@@ -64,14 +68,26 @@ decisión. El proyecto se trabaja desde varios computadores: esos documentos son
 - `supabase/migrations/` — esquema + RLS. Aún no aplicada en ningún entorno: se puede reescribir.
 - `scripts/test-rls.mjs` — pruebas de RLS.
 - `lib/solicitudes/` — `schemas.ts` (Zod de los dos módulos, se reutiliza en servidor), `estados.ts`
-  (estados que ve el usuario), `mock.ts` (datos de ejemplo de las maquetas: reemplazar por Supabase).
+  (estados y tipos que ve el usuario), `datos.ts` (lecturas con RLS), `procesar.ts` (lanzar/completar consultas).
 - `components/ui/` — componentes propios livianos (botón, campos, pastillas). `components/solicitudes/`
   y `components/usuario/` — piezas de la sección del usuario.
-- `lib/estudios/mock.ts`, `lib/auditoria/mock.ts` — datos de ejemplo del admin (estudios, usuarios, auditoría).
+- `lib/estudios/tipos.ts`, `lib/auditoria/tipos.ts` — tipos del admin.
 - `components/ui/paginacion.tsx` — paginación (5 por página por defecto). Hoy en el cliente; con Supabase, en servidor con `?pagina=`.
-- `lib/demo.ts` — `MODO_DEMO`: accesos de prueba en el login. Quitar al conectar Supabase Auth.
+- `lib/demo.ts` — `MODO_DEMO`: accesos de prueba en el login, solo cuando NO hay Supabase configurado.
+- Sesión: `components/sesion/chip-sesion.tsx` (en los layouts, dentro de Suspense) exige sesión y, en el admin,
+  rol admin. Login/cerrar sesión en `app/(auth)/login/actions.ts`. Auditoría: `registrarAuditoria()` de `lib/auditoria.ts`.
+- Usuarios (real): `lib/usuarios/datos.ts` + `app/(admin)/usuarios/acciones.ts` (Supabase Auth Admin con la secret key).
+- La BD se aplica **sin terminal**: pegar la migración en el SQL Editor de Supabase; primer admin con `supabase/seed.sql`.
 - Rutas: usuario `/inicio`, `/solicitudes`, `/solicitudes/nueva/{documento,vehiculo}`; admin `/dashboard`, `/estudios`, `/estudios/[numero]`, `/usuarios`, `/auditoria`.
 - `components/admin/` — piezas del admin (badges del semáforo, menú, bandeja, decisión, usuarios).
-- `app/(auth)/login`, `app/(usuario)/**` y `app/(admin)/**` — hoy son **maquetas** (sin Supabase).
+- Todas las pantallas leen Supabase (ya no hay datos de ejemplo). Solo es simulado el procesamiento de TusDatos
+  (`lib/tusdatos/simulador.ts`) y las tarjetas de créditos/fuentes del panel. Auditoría: `lib/auditoria/datos.ts`.
+- Flujo de solicitudes: `app/(usuario)/solicitudes/acciones.ts` (usuario) → `lib/solicitudes/procesar.ts` (sistema,
+  secret key; en simulado usa `lib/tusdatos/simulador.ts` y completa con `after()`) → `lib/estudios/datos.ts` +
+  `app/(admin)/estudios/acciones.ts` (admin, con SU sesión: RLS + trigger de revisión).
+- Migraciones: cada cambio de BD es un archivo NUEVO en `supabase/migrations/` (la inicial ya está aplicada en la nube).
+- Tiempo real: `<RefrescoEnVivo tablas=[…]>` en los layouts (Supabase Realtime, respeta RLS). Los componentes
+  cliente deben derivar sus listas de las props (no copiarlas a `useState`) para reflejar el refresco.
+- `Date.now()` en componentes: no (lint de React y Cache Components); usar funciones fuera del componente tras `connection()`.
 - Fechas: usar `fechaCorta` de `lib/utils.ts` (no `Intl`: rompe la hidratación). Rutas con parámetros
   dinámicos leen `params` dentro de `<Suspense>`; componentes con `usePathname` en layouts, también.

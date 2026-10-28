@@ -1,29 +1,38 @@
 # ELOGIX — Roadmap de Implementación
 
 ## Estado Actual
-> Última actualización: 2026-10-26
+> Última actualización: 2026-10-28
 
-**Dónde vamos:** el **diseño de toda la app está terminado como maqueta** (datos de ejemplo, sin
-Supabase ni TusDatos todavía). Flujo confirmado con Keyner (contexto **§14.5**): dos módulos (documento y
-vehículo, este con **remolque opcional**, §14.6), envío automático, el usuario solo ve "enviada"/estado o
-error, y el admin revisa y decide.
+**Dónde vamos:** la app **funciona de punta a punta con Supabase real en modo simulado**
+(`TUSDATOS_MODO=simulado`: nada sale a TusDatos ni gasta créditos). Probado por el usuario: login por rol,
+gestión de usuarios, consultas del usuario (documento y vehículo con remolque), revisión y decisión del
+admin, decisión + comentario visibles para el usuario, tiempo real y auditoría real.
+**Lo que falta es conectar la API real de TusDatos** (no hay API key todavía) y validarlo con consultas
+reales: está detallado archivo por archivo en **`ELOGIX_CONTEXT.md` §16**.
 
-- **Login** con accesos de prueba (Usuario / Administrador) solo en desarrollo (`lib/demo.ts`).
-- **Usuario** (`app/(usuario)`): `/inicio`, `/solicitudes` (paginada), formularios de documento y vehículo.
-- **Admin** (`app/(admin)`): `/dashboard`, `/estudios` (paginada, por riesgo, aprobación en lote),
-  `/estudios/[numero]` (revisor), `/usuarios` (buscador, paginación, editar correo/contraseña), `/auditoria`.
-- **Pendiente de Keyner** (§15): preguntas 2, 3, 4, 5, 9, 10 y 11 (datos de entrada, criterios de decisión,
-  créditos, aprobación en TusDatos, permisos, tipos INT/NOMBRE, conductor/tenedor en la consulta combinada).
+**Supabase:** proyecto `skdrzcxknnjpylwhllgi`, sin terminal (las migraciones se pegan en el SQL Editor).
+Migraciones aplicadas: `init`, `detalle_resultados`, `decision_visible_usuario`. **Pendiente de confirmar:**
+`20261028010000_auditoria_tiempo_real.sql` (sin ella la Auditoría funciona, pero no se actualiza sola).
 
 **Siguiente paso recomendado (en orden):**
-1. ~~git init~~ ✅ hecho — repo `CALR0/elogix-app`, rama `main`.
-2. ~~Maquetas del admin~~ ✅ hechas.
-3. Antes de subir la BD: agregar a la migración las columnas del remolque (§14.6) y `tusdatos_batch_id`,
-   y correr `npm run db:test`. Luego crear el proyecto Supabase (guiar al usuario paso a paso),
-   `.env.local`, `supabase link` + `db push`, `npm run db:types` y el primer admin (`supabase/seed.sql`).
-4. Conectar login (`app/(auth)/login/actions.ts`) y vistas del usuario a Supabase; redirigir por rol.
-5. Envío real a TusDatos (cola con 5 s entre lanzamientos), webhook, cron de reconciliación y
-   reintento automático de fuentes con error + `vercel.json`. ⚠️ Gasta créditos: avisar antes de probar.
+1. Confirmar que se pegó la migración `auditoria_tiempo_real` y probar Auditoría en vivo con dos sesiones.
+2. Respuestas pendientes de Keyner (contexto §15: preguntas 2, 3, 4, 5, 9, 10, 11): datos/adjuntos de
+   entrada, criterios de decisión, costo de reconsultas, aprobación dentro de TusDatos, permisos del
+   usuario, tipos INT/NOMBRE, conductor/tenedor en la consulta combinada.
+3. **Con API key** (generarla con `POST /api/v1/auth/token`, ver la respuesta de cómo hacerlo en Postman):
+   implementar el modo real siguiendo §16.3 en este orden: lanzar (paso 2) → cola de 5 s (3) → mapear
+   el resultado real (4) → webhook (5) → cron (6) → reintento real (7) → ver reporte/PDF (8) →
+   copia del PDF al decidir (9) → evidencias y adjuntos (10) → créditos y fuentes en el panel (11).
+   ⚠️ Cada prueba gasta créditos: avisar al usuario antes y probar con muy pocas consultas.
+4. Validar con consultas reales los puntos de §16.2 (formato de respuestas, nombres de fuentes, webhook,
+   consulta combinada, reporte/PDF con 202, evidencias, créditos).
+5. Antes de producción (§16.3 pasos 12-13): borrar solicitudes simuladas, rotar la secret key,
+   desplegar en Vercel con sus variables y el Site URL de Auth, `NEXT_PUBLIC_MODO_DEMO=false`.
+6. Fase 4 (lotes desde Excel, monitoreo de fuentes/PEPs, alertas de créditos) y Fase 6 (pruebas
+   automáticas, rendimiento, guía de uso).
+
+**Ya no son maqueta:** ninguna pantalla. Todas leen Supabase. Solo es simulado el procesamiento de TusDatos
+(`lib/tusdatos/simulador.ts`) y las tarjetas de créditos/fuentes del panel.
 
 ### Bitácora de sesiones
 
@@ -44,6 +53,11 @@ error, y el admin revisa y decide.
 | 2026-10-26 | Fase 3 (c) | Accesos de prueba en el login. Inicio del usuario en `/inicio` y Mis solicitudes en `/solicitudes`. Paginación reutilizable (`components/ui/paginacion.tsx`, 5 por página) en Mis solicitudes y bandeja de estudios; máx. 5 en recientes y en "Requieren atención". Usuarios: editar correo y contraseña. Nueva pantalla **Auditoría** (`/auditoria`) con filtros, paginación de 10 y exportar CSV |
 | 2026-10-26 | Fase 3 (d) | Keyner: cabezote y remolque tienen placas y propietarios distintos → TusDatos lo cubre con la **consulta combinada** (`/api/v1/batches/launch/vehicle_combo`), documentado en contexto §14.6. Maqueta: opción "Lleva remolque o tráiler" en consulta por vehículo. Panel admin reorganizado en filas balanceadas ("Requieren atención" ya no se estira; ~670 → 363 px) |
 | 2026-10-26 | Fase 3 (e) | Usuarios: buscador + paginación de 5 y nuevo texto descriptivo. Login: quitado el rótulo superior; pie "[año] © Elogia Soluciones Logísticas" visible en todos los tamaños, con el año calculado por `"use cache"` + `cacheLife("days")` (Cache Components no permite `new Date()` en el prerender). Paginación con singular/plural |
+| 2026-10-27 | Fase 3 (f) | Inicio de la integración. Migración: columnas del remolque (`placa_remolque`, `tipo_doc_propietario_remolque`, `documento_propietario_remolque`), `tusdatos_batch_id` y `simulada`; 6 pruebas RLS nuevas (28 en total). `lib/env.ts`: `TUSDATOS_MODO` (`simulado` por defecto; credenciales, webhook y cron solo obligatorios en `real`), variables vacías tratadas como no definidas. `getTusDatos()` bloquea llamadas reales en modo simulado. Guía de creación de Supabase entregada al usuario |
+| 2026-10-27 | Fase 3 (g) | **Integración 1: auth y usuarios.** Login real con Supabase Auth (`signInWithPassword`, mensaje genérico, cuentas desactivadas bloqueadas), cerrar sesión, redirección por rol. `<ChipSesion>` en los layouts (dentro de Suspense) exige sesión / rol admin (403). Usuarios: datos reales (`lib/usuarios/datos.ts`) y Server Functions (`app/(admin)/usuarios/acciones.ts`): crear con contraseña inicial, cambiar rol, activar/desactivar (perfil + bloqueo en Auth), editar correo/contraseña; el admin no puede desactivarse ni quitarse el rol. Auditoría real (`lib/auditoria.ts`). Accesos de prueba solo sin Supabase. Verificado: rutas sin sesión → /login; login con credenciales falsas rechazado contra el Supabase real |
+| 2026-10-27 | Fase 3 (h) | Fix: `connection()` en `getCurrentUser` (Supabase usa `Date.now()`; Cache Components no lo permite al prerenderizar). **Integración 2: solicitudes en modo simulado.** Usuario: `crearConsultaDocumento`/`crearConsultaVehiculo`/`reintentarEnvio` (`app/(usuario)/solicitudes/acciones.ts`) insertan con la sesión del usuario (RLS) y lanzan; `/inicio` y `/solicitudes` con datos reales. Sistema: `lib/solicitudes/procesar.ts` + `lib/tusdatos/simulador.ts` (resultado determinista por documento, ~25 % con fuente caída, documentos terminados en 000 simulan fallo de envío; resultado con `after()` a los 8 s). Admin: `lib/estudios/datos.ts` (estudios + autor + resultado + historial desde `audit_logs`), bandeja, revisor (decidir, reabrir, reintentar), aprobación en lote, panel y contador del menú reales; acciones en `app/(admin)/estudios/acciones.ts` con la sesión del admin. Migración nueva `20261027000000_detalle_resultados.sql` (nombre consultado, hallazgos, reintentos). Eliminados los datos de ejemplo de solicitudes y estudios |
+| 2026-10-28 | Fase 3 (i) | **Tiempo real:** `components/sesion/refresco-en-vivo.tsx` (Supabase Realtime con el token del usuario → respeta RLS; agrupa cambios y hace `router.refresh()`), montado en los layouts (admin: `solicitudes` + `solicitud_resultados`; usuario: `solicitudes`). Bandeja ahora deriva la lista de los datos del servidor. **Decisión visible para el usuario:** migración `20261028000000_decision_visible_usuario.sql` (columnas `decision`, `decision_comentario`, `decision_at` en `solicitudes` + trigger desde `solicitud_resultados`); el usuario ve Enviada → En proceso → En revisión → Aprobada/Rechazada con el comentario; filtros y contadores por etapa; aviso al admin de que el comentario lo verá el usuario. 3 pruebas RLS nuevas (31). **Login** conserva el correo tras un error (verificado) |
+| 2026-10-28 | Fase 3 (j) | **Auditoría real y en vivo:** `lib/auditoria/datos.ts` lee `audit_logs` (actor, SOL- de la solicitud, nombre del usuario afectado) y traduce cada acción a una frase; `/auditoria` con `<RefrescoEnVivo tablas=["audit_logs"]>`; migración `20261028010000_auditoria_tiempo_real.sql` (publica `audit_logs` en Realtime). Verificado contra la base real: 44 eventos de 14 tipos. Eliminados los últimos datos de ejemplo. **Documentación de cierre:** contexto §16 (qué funciona, qué validar con la API real y qué cambiar archivo por archivo) y nuevo Estado Actual |
 
 ---
 
@@ -96,14 +110,14 @@ Incluye la revisión de arquitectura de Fase 1 (ver `ELOGIX_CONTEXT.md` §13).
 - [x] Repo en GitHub creado y con push
 - [ ] **(Tú, guiado)** Aplicar migración: `npx supabase link` + `npm run db:push` (sin BD local: todo contra la nube)
 - [ ] Generar tipos: `npm run db:types` → tipar los clientes de Supabase
-- [ ] Route Handlers: `/api/webhooks/tusdatos`, `/api/cron/sincronizar`, `/api/reportes/[id]` + `vercel.json` (cron)
+- [ ] Route Handlers: `/api/webhooks/tusdatos`, `/api/cron/sincronizar`, `/api/reportes/[id]` + `vercel.json` (cron) — detalle en contexto §16.3 (pasos 5, 6, 8)
 - [ ] Husky + lint-staged (opcional, cuando haya git)
 
 ### Tiempo estimado: 2-3 días
 
 ---
 
-## Fase 3 — Core Features 🔄 EN CURSO (maquetas listas, falta conectar)
+## Fase 3 — Core Features 🔄 EN CURSO (integrada en modo simulado; falta la API real, ver contexto §16)
 
 ### Objetivos
 Funcionalidades esenciales para que ELOGIX sea usable con el modelo de 2 roles.
@@ -224,7 +238,7 @@ decide (ver contexto §14). Las tareas marcadas *(§14)* salen de esa propuesta 
 |------|-------------|--------|--------|
 | 1 | Análisis y Documentación | ✅ Completada | 1 día |
 | 2 | Setup del Proyecto | 🔄 Falta Supabase, rutas API y cron | 2-3 días |
-| 3 | Core Features (formulario usuario + revisor admin) | 🔄 Maquetas listas; falta conectar | 6-8 días |
+| 3 | Core Features (formulario usuario + revisor admin) | 🔄 Integrada en simulado; falta API real (§16) | 6-8 días |
 | 4 | Gestión de usuarios + Auditoría + Batch + Webhooks | ⏳ Pendiente | 8-10 días |
 | 5 | Gestión de usuarios y configuración | ⏳ Pendiente | 2-3 días |
 | 6 | Polish y Deploy | ⏳ Pendiente | 3-4 días |

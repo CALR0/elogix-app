@@ -1,8 +1,9 @@
 # ELOGIX — Contexto Técnico del Proyecto
 > Plataforma de validaciones de Elogia Soluciones Logísticas, potenciada por TusDatos API
 
-> **Estado (2026-10-25):** Fase 2 en curso. El objetivo de negocio está en **§14** y las preguntas
-> abiertas con el experto de TusDatos en **§15**: léelas antes de tocar el modelo de datos.
+> **Estado (2026-10-28):** app funcional con Supabase en **modo simulado**; falta conectar la API real de
+> TusDatos (ver **§16**: qué validar y qué cambiar, archivo por archivo).
+> El objetivo de negocio está en **§14** y las preguntas abiertas con el experto de TusDatos en **§15**: léelas antes de tocar el modelo de datos.
 > Lo que ya cambió respecto al diseño de Fase 1 está en **§13**.
 >
 > **ELOGIX es de uso exclusivo de Elogia** (una sola empresa). No hay multi-organización ni
@@ -890,7 +891,7 @@ La decisión final **siempre es humana** (admin). El sistema prepara, ordena y s
 | P4 | Bandeja del admin ordenada por riesgo: alto/medio primero; **aprobación en lote** de los "sin hallazgo". | Recomendado |
 | P5 | ~~**Estudio ≠ consulta**~~ | ❌ Descartado: son dos módulos independientes, 1 solicitud = 1 consulta (§14.5) |
 | P6 | Reglas de **decisión sugerida** (p.ej. "hallazgo alto ⇒ sugerir rechazo") si el experto tiene criterios claros. | Depende de §15 |
-| P7 | El usuario **no ve resultados ni la decisión**: solo que su envío fue exitoso y el estado del proceso, o un error con "Intentar de nuevo". | ✅ Confirmado (§14.5) |
+| P7 | El usuario **no ve resultados**; ve el estado y, al final, **la decisión del admin (aprobada/rechazada) y su comentario**. | ✅ Confirmado (actualizado 2026-10-28) |
 | P8 | **Copia del PDF en Storage solo al aprobar/rechazar** (no por cada consulta). Ver 14.4. | Recomendado, no implementado |
 
 ### 14.4 Reportes: qué entrega TusDatos y copia del PDF
@@ -931,8 +932,10 @@ consulta TusDatos** (`solicitudes` + `solicitud_resultados`), que ya soporta amb
 `INT` y `NOMBRE` también existen en `/api/launch`; no se muestran por ahora (confirmar si se usan).
 
 **Roles:**
-- **Usuario:** registra la consulta → se envía sola a TusDatos. Solo ve "Solicitud enviada" + el
-  estado del proceso (Enviada → En proceso → Finalizada). **Nunca** ve resultados ni la decisión.
+- **Usuario:** registra la consulta → se envía sola a TusDatos. Ve "Solicitud enviada" y la etapa:
+  Enviada → En proceso → En revisión → **Aprobada / Rechazada**, con el **comentario del admin** si lo dejó
+  (cambio pedido el 2026-10-28). **Nunca** ve hallazgos, fuentes ni reportes: un trigger copia a
+  `solicitudes` solo `decision` y `decision_comentario` desde `solicitud_resultados` (migración 20261028).
 - **Admin:** verifica que el estudio esté completo y válido, revisa resultados y aprueba/rechaza.
 
 **Errores (dos tipos distintos):**
@@ -973,8 +976,21 @@ propietarios distintos**. TusDatos lo resuelve con la **consulta combinada de ve
   lote por solicitud, y sigue el resultado con el webhook `batch` + cron.
 - Sigue siendo **una solicitud** para el usuario y **un estudio** para el admin, que ve en el revisor
   las secciones cabezote, remolque y propietarios.
-- **BD (pendiente):** columnas `placa_remolque`, `tipo_doc_propietario_remolque`,
-  `documento_propietario_remolque` en `solicitudes` (o un `datos jsonb` del módulo) y `tusdatos_batch_id`.
+- **BD:** ✅ columnas `placa_remolque` (R/S + 5 dígitos), `tipo_doc_propietario_remolque`,
+  `documento_propietario_remolque` (vacías = mismo propietario) y `tusdatos_batch_id` en `solicitudes`.
+
+### 14.7 Modo simulado (integración sin gastar créditos)
+
+Mientras no haya API key de TusDatos (y para probar sin gastar créditos), `TUSDATOS_MODO=simulado`
+(valor por defecto):
+- Todo es real **excepto la llamada a TusDatos**: login, solicitudes en Supabase, estados, resultados,
+  revisión del admin y auditoría.
+- Un "simulador" reemplaza a TusDatos: genera un resultado de prueba (nivel de hallazgo, fuentes, a veces
+  fuentes con error) con el mismo formato de la API, para ejercitar el flujo completo.
+- Cada solicitud queda con `simulada = true` (el usuario no puede ponerlo): se pueden distinguir y borrar
+  antes de pasar a producción.
+- `getTusDatos()` lanza un error si se usa en modo simulado: es imposible gastar créditos por accidente.
+- Para pasar a real: `TUSDATOS_MODO=real` + credenciales + `TUSDATOS_WEBHOOK_TOKEN` + `CRON_SECRET`.
 
 ---
 
@@ -1001,4 +1017,71 @@ sus respuestas.
 
 ---
 
-*Documento generado: 2026-10-25 | Versión: 1.3 — Objetivo de negocio (§14) y pendientes Keyner de TusDatos (§15)*
+## 16. Estado de la integración y paso a modo real (2026-10-28)
+
+### 16.1 Qué ya funciona con datos reales (Supabase, modo simulado)
+
+Probado por el usuario con su proyecto Supabase (`skdrzcxknnjpylwhllgi`):
+
+| Área | Estado | Dónde |
+|------|--------|-------|
+| Login, cerrar sesión, redirección por rol, 403 al usuario en el admin | ✅ | `app/(auth)/login/actions.ts`, `components/sesion/chip-sesion.tsx`, `lib/auth.ts` |
+| Usuarios: crear, rol, activar/desactivar (bloqueo en Auth), editar correo/contraseña | ✅ | `app/(admin)/usuarios/acciones.ts`, `lib/usuarios/datos.ts` |
+| Usuario crea consultas (documento / vehículo con remolque), reintenta envíos | ✅ | `app/(usuario)/solicitudes/acciones.ts` |
+| Procesamiento simulado (sin TusDatos) con resultado a los 8 s | ✅ | `lib/solicitudes/procesar.ts`, `lib/tusdatos/simulador.ts` |
+| Admin: panel, bandeja, revisor, decisión, lote, reintento de fuentes | ✅ | `lib/estudios/datos.ts`, `app/(admin)/estudios/acciones.ts` |
+| Usuario ve etapa + decisión + comentario (nunca hallazgos) | ✅ | migración `20261028000000`, `components/solicitudes/estado-badge.tsx` |
+| Tiempo real (solicitudes, resultados, auditoría) | ✅ | `components/sesion/refresco-en-vivo.tsx` + Realtime |
+| Auditoría real con frases legibles, filtros, CSV | ✅ | `lib/auditoria/datos.ts`, `app/(admin)/auditoria/page.tsx` |
+
+Migraciones aplicadas en la nube (pegadas en el SQL Editor, en este orden):
+`20261025000000_init` → `20261027000000_detalle_resultados` → `20261028000000_decision_visible_usuario`
+→ `20261028010000_auditoria_tiempo_real` (esta última: pendiente de confirmar que el usuario la pegó).
+
+### 16.2 Qué falta validar con la API real de TusDatos
+
+Nada de esto se puede probar sin **API key** y sin gastar créditos. Hacerlo con pocas consultas
+controladas (avisar al usuario antes de cada prueba):
+
+1. **Formato real de las respuestas** contra lo que asume el código:
+   - `GET /api/results/{jobid}` → `estado`, `hallazgos` ("" = sin hallazgo), `results`, `errores`, `id`.
+   - `GET /api/report_json/{id}` → `dict_hallazgos` (¿claves `altos/medios/bajos/infos`? ¿campos
+     `codigo/fuente/hallazgo/descripcion`?). El simulador usa `{ nivel, codigo, fuente, titulo, descripcion }`:
+     escribir el mapeo real en un solo lugar (ver 16.3, paso 4).
+   - Nombres reales de las fuentes (el simulador usa nombres de ejemplo).
+2. **Tiempos** (~1 min) y **límite de 5 s entre lanzamientos**.
+3. **Webhook** `individualCompleted` y `batch`: que lleguen con nuestro Bearer y el `webhook_reference`.
+4. **Consulta combinada** (vehículo + remolque): resultado en `batches/result` y el reporte
+   `/api/v2/report_combo/{id}` (citado en la spec pero sin ruta documentada).
+5. **Reporte HTML/PDF** (`/api/v2/report*`, `report*_pdf` con su `202` mientras se genera) y
+   **evidencias** (`static.tusdatos.co/static/img/{dest}/{fuente}.jpg`).
+6. **Créditos** (`GET /api/plans`) y **estado de fuentes** (`GET /api/v1/sources/status`).
+
+### 16.3 Qué cambiar y dónde (paso a modo real)
+
+| # | Qué | Dónde | Detalle |
+|---|-----|-------|---------|
+| 1 | Credenciales y modo | `.env.local` y Vercel | `TUSDATOS_MODO=real`, `TUSDATOS_API_TOKEN` (generar con `POST /api/v1/auth/token`), `TUSDATOS_WEBHOOK_TOKEN` y `CRON_SECRET` (32+ caracteres). `lib/env.ts` ya los exige en modo real. |
+| 2 | Lanzar la consulta real | `lib/solicitudes/procesar.ts` → `lanzarConsulta()` | Hoy lanza error en modo real (protección). Implementar: documento → `getTusDatos().launchIndividual({ typedoc, doc, fechaE dd/mm/aaaa, name, webhook_reference: solicitud.id })`; vehículo sin remolque → `launchVehicle`; con remolque → lote `vehicle_combo` (agrupar varias en un lote, máx. 3 lotes activos). Guardar `tusdatos_jobid` / `tusdatos_batch_id`, `simulada = false`. Errores HTTP: `TusDatosError` (403 sin créditos, 429/5xx reintentable). |
+| 3 | Cola con 5 s entre lanzamientos | `lib/solicitudes/procesar.ts` + cron | Dejar la solicitud en `enviada` y que un proceso las lance en serie (cron cada minuto o `after()` con espera). Nunca lanzar en paralelo. |
+| 4 | Traducir el resultado real | nuevo `lib/tusdatos/mapear.ts` | `JobStatus` + `report_json` → lo que hoy escribe `completarSimulada()` en `solicitud_resultados` (`hallazgo_nivel`, `fuentes`, `fuentes_con_error`, `nombre_consultado`, `hallazgos`). Reutilizar la misma escritura. |
+| 5 | Webhook | nuevo `app/api/webhooks/tusdatos/route.ts` | Verificar `Authorization: Bearer TUSDATOS_WEBHOOK_TOKEN`; guardar en `webhook_events`; con `webhook_reference` (= id de la solicitud) consultar `getJobStatus`/`getReportJson` y completar (paso 4). Responder 200 en < 10 s (procesar con `after()`). Registrar el webhook una vez con `saveWebhookConfig` (`BearerAuth`). |
+| 6 | Cron de reconciliación | nuevo `app/api/cron/sincronizar/route.ts` + `vercel.json` | Proteger con `CRON_SECRET`. Lanzar las `enviada`; consultar las `procesando`; `jobid` con más de 2 h → `error`; reintento automático de fuentes con error (máx. 3, `retry()` no consume créditos). |
+| 7 | Reintento real de fuentes | `lib/solicitudes/procesar.ts` → `reintentarFuentes()` | Hoy re-simula. Real: `getTusDatos().retry(reportId, typedoc)` → nuevo `jobid` → esperar resultado (webhook `individualRetry` o cron). |
+| 8 | Ver reporte y PDF | nuevo `app/api/reportes/[id]/route.ts` + revisor | `requireAdmin()` → `getTusDatos().fetchReport(reportId, persona/nit/vehiculo, html/pdf)`; si `processing` (202) responder "generando". En `app/(admin)/estudios/[numero]/page.tsx` los botones "Ver reporte" y "Descargar PDF" hoy son `<span>` inactivos: cambiarlos por enlaces a esa ruta (HTML en `<iframe>` de la misma app). |
+| 9 | Copia del PDF al decidir | `app/(admin)/estudios/acciones.ts` → `decidirEstudio()` | Con `fetchReportWhenReady` guardar en Storage `reportes/{solicitud_id}.pdf` y `reporte_pdf_path` (contexto §14.4). |
+| 10 | Evidencias y documentos | revisor del admin | Mostrar las capturas de evidencia (`dest` del `report_json`). Adjuntos del usuario (autorización firmada, licencia…): campo de carga en los formularios → bucket `autorizaciones/{user_id}/…` (ya existe con sus permisos) → enlaces en el revisor. Depende de la respuesta de Keyner (§15, pregunta 2). |
+| 11 | Créditos y fuentes en el panel | `app/(admin)/dashboard/page.tsx` | Reemplazar las tarjetas "Simulado" por `getPlans()` y `getSourcesStatus()` (cachear unos minutos con `"use cache"` + `cacheLife`). Alerta con `configuracion.alerta_creditos_minimos`. |
+| 12 | Limpiar datos de prueba | SQL Editor | Antes de producción: `delete from solicitudes where simulada;` (borra en cascada sus resultados). Los eventos de auditoría de prueba pueden quedarse o filtrarse por fecha. |
+| 13 | Seguridad antes de Vercel | Supabase + Vercel | Rotar la secret key (quedó en un chat), variables en Vercel, Site URL de Auth al dominio final, `NEXT_PUBLIC_MODO_DEMO=false`. |
+
+### 16.4 Puntos de diseño a no romper
+- El usuario **nunca** lee `solicitud_resultados`; solo ve `decision`/`decision_comentario` en `solicitudes`.
+- Las escrituras del sistema (estados, resultados) usan la secret key en el servidor; las del usuario y
+  las decisiones del admin, su propia sesión (RLS + grants + trigger `stamp_revision`).
+- Cada acción relevante → `registrarAuditoria()`; el historial del revisor sale de `audit_logs`.
+- Cambios de BD: archivo NUEVO en `supabase/migrations/` + `npm run db:test` + pegarlo en el SQL Editor.
+
+---
+
+*Documento actualizado: 2026-10-28 | Versión: 1.4 — Integración con Supabase en modo simulado y guía de paso a modo real (§16)*
